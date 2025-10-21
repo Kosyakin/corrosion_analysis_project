@@ -1,0 +1,15 @@
+# Core data analysis packages
+pandas==2.1.4
+numpy==1.26.2
+
+# Visualization packages
+matplotlib==3.8.2
+seaborn==0.13.2
+
+# Database connectivity
+SQLAlchemy==2.0.44
+psycopg2-binary==2.9.11
+
+# Jupyter notebook support
+matplotlib-inline==0.1.6
+
