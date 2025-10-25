@@ -113,6 +113,16 @@ measurement_sequence AS (
         ec.material_type,
         ec.outer_diameter,
         ec.inner_diameter,
+        -- Материал с числовой оценкой стойкости
+        CASE 
+            WHEN ec.material_type = 'Аустенитная сталь > 2.25% Mo' THEN 6
+            WHEN ec.material_type = 'Аустенитная сталь (без Мо)' THEN 5
+            WHEN ec.material_type = 'Сталь легированная Cr 5%' THEN 4
+            WHEN ec.material_type = 'Сталь низколегированная' THEN 3
+            WHEN ec.material_type = 'Углеродистая сталь 1 Cr 0.5 Mo' THEN 2
+            WHEN ec.material_type = 'Углеродистая сталь' THEN 1
+            ELSE 0
+        END AS material_resistance_score,
         -- Геометрические параметры
         ec.outer_diameter - ec.inner_diameter AS wall_thickness,
         ec.outer_diameter / 2.0 AS radius,
@@ -175,7 +185,7 @@ SELECT
         ELSE NULL 
     END AS corrosion_rate,
     
-    -- Геометрические признаки
+    -- ГЕОМЕТРИЧЕСКИЕ ПРИЗНАКИ
     ct.component_type_id,
     ct.component_type_name,
     ms.wall_thickness,
@@ -189,6 +199,10 @@ SELECT
     END AS diameter_to_thickness_ratio,
     -- Площадь поперечного сечения
     (PI() * (ms.outer_diameter/2.0)^2 - PI() * (ms.inner_diameter/2.0)^2) AS cross_sectional_area,
+    
+    -- МАТЕРИАЛ
+    ms.material_type,
+    ms.material_resistance_score,
     
     -- Химический состав среды
     cc.water_content,
@@ -238,8 +252,7 @@ SELECT
     ms.operating_temperature,
     ms.operating_pressure,
     ms.component,
-    ms.material_code,
-    ms.material_type
+    ms.material_code
 
 FROM measurement_sequence ms
 LEFT JOIN chemical_components cc ON 
