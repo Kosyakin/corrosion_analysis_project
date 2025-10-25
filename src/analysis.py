@@ -87,4 +87,58 @@ class CorrosionAnalyzer:
     def reset_data(self) -> 'CorrosionAnalyzer':
         """Сброс к исходным данным"""
         return CorrosionAnalyzer(self.original_data)
+    
+    def safe_correlation(self, x: pd.Series, y: pd.Series) -> float:
+        """
+        Безопасный расчет корреляции с обработкой NaN значений
+        
+        Args:
+            x: Первая переменная
+            y: Вторая переменная
+            
+        Returns:
+            Коэффициент корреляции или NaN если расчет невозможен
+        """
+        # Удаляем NaN значения
+        mask = ~(np.isnan(x) | np.isnan(y))
+        x_clean = x[mask]
+        y_clean = y[mask]
+        
+        if len(x_clean) < 2:
+            return np.nan
+        
+        # Проверяем стандартное отклонение
+        if x_clean.std() == 0 or y_clean.std() == 0:
+            return np.nan
+        
+        return np.corrcoef(x_clean, y_clean)[0, 1]
+    
+    def get_correlations_with_target(self, target_col: str = 'corrosion_rate', 
+                                   exclude_zero_variance: bool = True) -> Dict[str, float]:
+        """
+        Получение корреляций всех параметров с целевой переменной
+        
+        Args:
+            target_col: Название целевой колонки
+            exclude_zero_variance: Исключать параметры с нулевой вариацией
+            
+        Returns:
+            Словарь с корреляциями
+        """
+        if target_col not in self.data.columns:
+            raise ValueError(f"Целевая колонка '{target_col}' не найдена в данных")
+        
+        correlations = {}
+        target = self.data[target_col]
+        
+        for col in self.data.columns:
+            if col != target_col and self.data[col].dtype in ['float64', 'int64']:
+                if exclude_zero_variance and self.data[col].std() == 0:
+                    continue
+                
+                corr = self.safe_correlation(self.data[col], target)
+                if not np.isnan(corr):
+                    correlations[col] = corr
+        
+        return correlations
 
