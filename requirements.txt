@@ -13,3 +13,6 @@ psycopg2-binary==2.9.11
 # Jupyter notebook support
 matplotlib-inline==0.1.6
 
+# ML
+scikit-learn==1.3.2
+
