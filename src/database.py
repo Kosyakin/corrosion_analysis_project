@@ -37,6 +37,14 @@ def load_corrosion_data():
     df = pd.read_sql(query, engine)
     return df
 
+def load_corrosion_data_new():
+    """Загрузка данных из представления"""
+    engine = create_engine(CONNECTION_STRING)
+    query = "SELECT * FROM pipeline_corrosion_analysis_new_view"
+    df = pd.read_sql(query, engine)
+    return df
+
+
 def load_raw_data():
     """Загрузка сырых данных для глубокого анализа"""
     engine = create_engine(CONNECTION_STRING)
