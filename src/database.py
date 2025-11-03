@@ -40,7 +40,7 @@ def load_corrosion_data():
 def load_corrosion_data_new():
     """Загрузка данных из представления"""
     engine = create_engine(CONNECTION_STRING)
-    query = "SELECT * FROM pipeline_corrosion_analysis_new_view"
+    query = "SELECT * FROM pipeline_corrosion_worst_case_view"
     df = pd.read_sql(query, engine)
     return df
 
