@@ -42,6 +42,107 @@ class AdvancedCorrosionAnalyzer:
         self.target = target_column
         return self
     
+    def add_engineered_indices(self) -> list:
+        """
+        Добавление инженерных индексов на основе физико-химических соображений
+        
+        Добавляет следующие признаки:
+        - h2s_aqueous_exposure: доступность H2S в водной фазе
+        - co2_aqueous_temp_index: CO2 в воде с температурной коррекцией
+        - acid_load_aqueous: кислотная нагрузка в воде
+        - chloride_aqueous: хлоридная агрессивность в воде
+        - oxygen_aqueous: содержание кислорода в воде
+        - mixed_acid_gas_index: комбинированный индекс кислотных газов
+        - aggressiveness_per_resistance: соотношение агрессивности и стойкости материала
+        - protection_gap: разрыв между агрессивностью и защитой
+        - pitting_chloride_index: индекс питтинговой коррозии от хлоридов
+        - hoop_stress_proxy: прокси-напряжение оболочки
+        - material_adjusted_stress: напряжение с учетом материала
+        
+        Returns:
+        --------
+        list
+            Список добавленных колонок
+        """
+        eps = 1e-6
+        T0 = 25.0
+        kT = 0.025  # температурная чувствительность для CO2 (приближенная)
+        
+        df = self.data
+        
+        # Проверка наличия необходимых колонок
+        required_cols = [
+            'h2s_content', 'h2s_water_ratio', 'water_content', 'co2_content',
+            'operating_temperature', 'total_acidity_index', 'chloride_aggressiveness',
+            'oxygen_content', 'corrosion_aggressiveness_index', 'material_resistance_score',
+            'corrosion_protection_index', 'pitting_corrosion_index',
+            'diameter_to_thickness_ratio', 'operating_pressure', 'nominal_thickness_mmc',
+            'worst_thickness_measurement', 'equipment_age_years', 'stress_corrosion_index'
+        ]
+        
+        missing_cols = [col for col in required_cols if col not in df.columns]
+        if missing_cols:
+            print(f"⚠️ Предупреждение: отсутствуют колонки {missing_cols}")
+            print("   Некоторые инженерные индексы могут быть не созданы")
+        
+        # Доступность агрессивных компонентов в водной фазе
+        if all(col in df.columns for col in ['h2s_content', 'h2s_water_ratio', 'water_content']):
+            df['h2s_aqueous_exposure'] = df['h2s_content'] * df['h2s_water_ratio'] * df['water_content']
+        
+        if all(col in df.columns for col in ['co2_content', 'water_content', 'operating_temperature']):
+            df['co2_aqueous_temp_index'] = df['co2_content'] * df['water_content'] * np.exp(kT * (df['operating_temperature'] - T0))
+        
+        # Кислотная/хлоридная нагрузка в воде
+        if all(col in df.columns for col in ['total_acidity_index', 'water_content']):
+            df['acid_load_aqueous'] = df['total_acidity_index'] * df['water_content']
+        
+        if all(col in df.columns for col in ['chloride_aggressiveness', 'water_content']):
+            df['chloride_aqueous'] = df['chloride_aggressiveness'] * df['water_content']
+        
+        if all(col in df.columns for col in ['oxygen_content', 'water_content']):
+            df['oxygen_aqueous'] = df['oxygen_content'] * df['water_content']
+        
+        # Комбинированные индексы среды/материала/защиты
+        if all(col in df.columns for col in ['h2s_content', 'co2_content']):
+            df['mixed_acid_gas_index'] = df['h2s_content'] + 0.3 * df['co2_content']
+        
+        if all(col in df.columns for col in ['corrosion_aggressiveness_index', 'material_resistance_score']):
+            df['aggressiveness_per_resistance'] = df['corrosion_aggressiveness_index'] / (df['material_resistance_score'] + eps)
+        
+        if all(col in df.columns for col in ['corrosion_aggressiveness_index', 'corrosion_protection_index']):
+            df['protection_gap'] = (df['corrosion_aggressiveness_index'] - df['corrosion_protection_index']).clip(lower=0)
+        
+        if all(col in df.columns for col in ['pitting_corrosion_index']) and 'chloride_aqueous' in df.columns:
+            df['pitting_chloride_index'] = df['pitting_corrosion_index'] * df['chloride_aqueous']
+        
+        # Прокси-напряжение и деградация
+        if all(col in df.columns for col in ['diameter_to_thickness_ratio', 'operating_pressure']):
+            df['hoop_stress_proxy'] = df['diameter_to_thickness_ratio'] * df['operating_pressure']
+               
+        if all(col in df.columns for col in ['stress_corrosion_index', 'material_resistance_score']):
+            df['material_adjusted_stress'] = df['stress_corrosion_index'] / (df['material_resistance_score'] + eps)
+        
+        # Определяем список добавленных колонок
+        expected_cols = [
+            'h2s_aqueous_exposure', 'co2_aqueous_temp_index', 'acid_load_aqueous', 'chloride_aqueous',
+            'oxygen_aqueous', 'mixed_acid_gas_index', 'aggressiveness_per_resistance', 'protection_gap',
+            'pitting_chloride_index', 'hoop_stress_proxy',
+            'material_adjusted_stress'
+        ]
+        
+        added_cols = [col for col in expected_cols if col in df.columns]
+        
+        # Обновляем self.data
+        self.data = df
+        
+        if added_cols:
+            print(f"✅ Добавлены инженерные индексы: {len(added_cols)} колонок")
+            print(f"   Колонки: {added_cols}")
+        else:
+            print("⚠️ Не удалось добавить инженерные индексы (отсутствуют необходимые колонки)")
+        
+        return added_cols
+    
     def analyze_correlations(self, feature_columns: list, 
                            method: str = 'spearman',
                            top_k: int = 20,
