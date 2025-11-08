@@ -208,8 +208,8 @@ class AdvancedCorrosionAnalyzer:
         
         results_df = pd.DataFrame(results)
         
-        # Визуализация результатов
-        self._plot_model_comparison(results_df)
+        # Визуализация результатов отключена (сравнение Ridge vs Random Forest)
+        # self._plot_model_comparison(results_df)
         
         # Вывод результатов
         self._print_model_results(results_df)
@@ -267,6 +267,22 @@ class AdvancedCorrosionAnalyzer:
             return pd.DataFrame()
         
         comparison_df = pd.DataFrame(all_results)
+
+        # Сводная таблица по наборам признаков для Random Forest
+        try:
+            rf_df = comparison_df[comparison_df['model'] == 'random_forest'][['feature_set', 'r2', 'mae']].copy()
+            if not rf_df.empty:
+                summary_df = rf_df.rename(columns={
+                    'feature_set': 'Набор параметров',
+                    'r2': 'R2 Random Forest',
+                    'mae': 'MAE Random Forest'
+                })
+                print("\n📋 Сводная таблица по наборам признаков (Random Forest):")
+                print(summary_df.set_index('Набор параметров').round(4).to_string())
+                # Сохраняем в результаты для дальнейшего использования при необходимости
+                self.results['feature_sets_summary'] = summary_df
+        except Exception as e:
+            print(f"⚠️ Не удалось сформировать сводную таблицу: {e}")
         
         # Визуализация сравнения
         self._plot_feature_set_comparison(comparison_df)
