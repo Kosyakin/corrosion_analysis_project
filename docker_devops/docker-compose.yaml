@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: redmine-postgres
+    environment:
+      POSTGRES_DB: redmine
+      POSTGRES_USER: redmine
+      POSTGRES_PASSWORD: redmine_password
+      PGDATA: /var/lib/postgresql/data/pgdata  # Явное указание пути данных
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./postgres_backup:/backup  # Директория для бэкапов
+    networks:
+      - redmine-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U redmine"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  redmine:
+    image: redmine:latest
+    container_name: redmine-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      REDMINE_DB_POSTGRES: postgres
+      REDMINE_DB_DATABASE: redmine
+      REDMINE_DB_USERNAME: redmine
+      REDMINE_DB_PASSWORD: redmine_password
+      REDMINE_SECRET_KEY_BASE: ${REDMINE_SECRET_KEY_BASE:-your_secret_key_base_here}
+    ports:
+      - "3000:3000"
+    volumes:
+      - redmine_data:/usr/src/redmine/files
+      - ./redmine_plugins:/usr/src/redmine/plugins  # Плагины Redmine
+      - ./redmine_themes:/usr/src/redmine/public/themes  # Темы Redmine
+    networks:
+      - redmine-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redmine_data:
+
+networks:
+  redmine-network:
+    driver: bridge
