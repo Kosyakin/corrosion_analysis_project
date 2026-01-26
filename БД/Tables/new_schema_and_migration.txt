@@ -1,0 +1,246 @@
+ROLLBACK;
+
+BEGIN;
+
+-- 1) Core dictionaries
+-- Safe cleanup to allow re-runs
+DROP TABLE IF EXISTS public.new_measurements CASCADE;
+DROP TABLE IF EXISTS public.new_measurement_methods CASCADE;
+DROP TABLE IF EXISTS public.new_quality_indicators CASCADE;
+DROP TABLE IF EXISTS public.new_equipment_chemical_environment CASCADE;
+DROP TABLE IF EXISTS public.new_substances CASCADE;
+DROP TABLE IF EXISTS public.new_components CASCADE;
+DROP TABLE IF EXISTS public.new_material_codes CASCADE;
+DROP TABLE IF EXISTS public.new_equipment CASCADE;
+DROP TABLE IF EXISTS public.new_installations CASCADE;
+
+CREATE TABLE public.new_installations (
+	id serial4 PRIMARY KEY,
+	name varchar(50) NOT NULL UNIQUE,
+	factory varchar(255) NULL
+);
+
+WITH all_installations AS (
+	SELECT ec.installation AS name, NULL::varchar(255) AS factory FROM public.equipment_components ec WHERE ec.installation IS NOT NULL
+	UNION ALL
+	SELECT m.installation, NULL::varchar(255) FROM public.measurements m WHERE m.installation IS NOT NULL
+	UNION ALL
+	SELECT eod.installation, NULL::varchar(255) FROM public.equipment_operation_dates eod WHERE eod.installation IS NOT NULL
+	UNION ALL
+	SELECT ece.installation, ece.factory FROM public.equipment_chemical_environment ece WHERE ece.installation IS NOT NULL
+),
+agg AS (
+	SELECT name, MAX(factory) FILTER (WHERE factory IS NOT NULL) AS factory
+	FROM all_installations
+	WHERE name IS NOT NULL
+	GROUP BY name
+)
+INSERT INTO public.new_installations(name, factory)
+SELECT name, factory
+FROM agg;
+
+
+CREATE TABLE public.new_equipment (
+	id serial4 PRIMARY KEY,
+	installation_id int4 NOT NULL REFERENCES public.new_installations(id) ON DELETE RESTRICT,
+	name varchar(100) NOT NULL,
+	equipment_type_tm varchar(50) NULL,
+	start_date_of_operation date NULL,
+	UNIQUE (installation_id, name)
+);
+
+WITH equipment_base AS (
+	SELECT DISTINCT installation, equipment FROM public.equipment_components WHERE installation IS NOT NULL AND equipment IS NOT NULL
+	UNION
+	SELECT DISTINCT installation, equipment FROM public.measurements WHERE installation IS NOT NULL AND equipment IS NOT NULL
+	UNION
+	SELECT DISTINCT installation, equipment FROM public.equipment_operation_dates WHERE installation IS NOT NULL AND equipment IS NOT NULL
+	UNION
+	SELECT DISTINCT installation, equipment FROM public.equipment_chemical_environment WHERE installation IS NOT NULL AND equipment IS NOT NULL
+),
+type_agg AS (
+	SELECT installation, equipment, MIN(equipment_type_tm) AS equipment_type_tm
+	FROM public.equipment_components
+	GROUP BY installation, equipment
+),
+start_agg AS (
+	SELECT installation, equipment, MIN(start_date_of_operation) AS start_date_of_operation
+	FROM public.equipment_operation_dates
+	GROUP BY installation, equipment
+)
+INSERT INTO public.new_equipment(installation_id, name, equipment_type_tm, start_date_of_operation)
+SELECT ni.id, eb.equipment, ta.equipment_type_tm, sa.start_date_of_operation
+FROM equipment_base eb
+JOIN public.new_installations ni ON ni.name = eb.installation
+LEFT JOIN type_agg ta ON ta.installation = eb.installation AND ta.equipment = eb.equipment
+LEFT JOIN start_agg sa ON sa.installation = eb.installation AND sa.equipment = eb.equipment;
+
+
+CREATE TABLE public.new_material_codes (
+	id serial4 PRIMARY KEY,
+	material_code varchar(20) NOT NULL UNIQUE,
+	material_grade varchar(50) NOT NULL,
+	material_type varchar(100) NOT NULL
+);
+
+INSERT INTO public.new_material_codes(material_code, material_grade, material_type)
+SELECT mc.material_code, mc.material_grade, mc.material_type
+FROM (
+	SELECT DISTINCT ON (material_code) material_code, material_grade, material_type
+	FROM public.material_codes
+	ORDER BY material_code, id
+) mc;
+
+
+-- 2) Components
+CREATE TABLE public.new_components (
+	id serial4 PRIMARY KEY,
+	equipment_id int4 NOT NULL REFERENCES public.new_equipment(id) ON DELETE CASCADE,
+	name varchar(100) NOT NULL,
+	source_component varchar(100) NULL,
+	material_code_id int4 NULL REFERENCES public.new_material_codes(id) ON DELETE SET NULL,
+	component_type varchar(50) NULL,
+	operating_temperature numeric(6, 1) NULL,
+	operating_pressure numeric(8, 3) NULL,
+	outer_diameter numeric(8, 1) NULL,
+	inner_diameter numeric(8, 1) NULL,
+	initial_thickness numeric(6, 1) NULL,
+	tank_volume numeric(10, 1) NULL,
+	UNIQUE (equipment_id, name),
+	CHECK (inner_diameter IS NULL OR outer_diameter IS NULL OR inner_diameter <= outer_diameter)
+);
+
+INSERT INTO public.new_components (
+	equipment_id, name, source_component, material_code_id, component_type,
+	operating_temperature, operating_pressure, outer_diameter, inner_diameter, initial_thickness, tank_volume
+) 
+SELECT DISTINCT ON (ne.id, ec.component)
+	ne.id AS equipment_id,
+	ec.component AS name,
+	ec.source_component,
+	nmc.id AS material_code_id,
+	ec.component_type,
+	ec.operating_temperature,
+	ec.operating_pressure,
+	CASE
+		WHEN ec.inner_diameter IS NOT NULL AND ec.outer_diameter IS NOT NULL
+			THEN GREATEST(ec.inner_diameter, ec.outer_diameter)
+		ELSE ec.outer_diameter
+	END AS outer_diameter,
+	CASE
+		WHEN ec.inner_diameter IS NOT NULL AND ec.outer_diameter IS NOT NULL
+			THEN LEAST(ec.inner_diameter, ec.outer_diameter)
+		ELSE ec.inner_diameter
+	END AS inner_diameter,
+	ec.initial_thickness,
+	ec.tank_volume
+FROM public.equipment_components ec
+JOIN public.new_installations ni ON ni.name = ec.installation
+JOIN public.new_equipment ne ON ne.name = ec.equipment AND ne.installation_id = ni.id
+LEFT JOIN public.new_material_codes nmc ON nmc.material_code = ec.material_code
+WHERE ec.component IS NOT NULL
+ORDER BY ne.id, ec.component, ec.id;
+
+
+-- 3) Measurements + small dictionaries for code values
+CREATE TABLE public.new_measurement_methods (
+	id serial4 PRIMARY KEY,
+	code varchar(10) NOT NULL UNIQUE
+);
+
+INSERT INTO public.new_measurement_methods(code)
+SELECT DISTINCT measurement_method
+FROM public.measurements
+WHERE measurement_method IS NOT NULL;
+
+CREATE TABLE public.new_quality_indicators (
+	id serial4 PRIMARY KEY,
+	code varchar(10) NOT NULL UNIQUE
+);
+
+INSERT INTO public.new_quality_indicators(code)
+SELECT DISTINCT quality_indicator
+FROM public.measurements
+WHERE quality_indicator IS NOT NULL;
+
+CREATE TABLE public.new_measurements (
+	id serial4 PRIMARY KEY,
+	component_id int4 NOT NULL REFERENCES public.new_components(id) ON DELETE CASCADE,
+	mms varchar(50) NULL,
+	measurement numeric(5, 1) NULL,
+	contour varchar(50) NULL,
+	measurement_date date NULL,
+	quality_indicator_id int4 NULL REFERENCES public.new_quality_indicators(id) ON DELETE SET NULL,
+	measurement_method_id int4 NULL REFERENCES public.new_measurement_methods(id) ON DELETE SET NULL,
+	nominal_thickness_mmc numeric(5, 1) NULL,
+	tmin_mmc numeric(5, 1) NULL
+);
+
+INSERT INTO public.new_measurements (
+	component_id, mms, measurement, contour, measurement_date,
+	quality_indicator_id, measurement_method_id, nominal_thickness_mmc, tmin_mmc
+)
+SELECT
+	nc.id AS component_id,
+	m.mms,
+	m.measurement,
+	m.contour,
+	m.measurement_date,
+	nqi.id AS quality_indicator_id,
+	nmm.id AS measurement_method_id,
+	m.nominal_thickness_mmc,
+	m.tmin_mmc
+FROM public.measurements m
+JOIN public.new_installations ni ON ni.name = m.installation
+JOIN public.new_equipment ne ON ne.name = m.equipment AND ne.installation_id = ni.id
+JOIN public.new_components nc ON nc.name = m.component AND nc.equipment_id = ne.id
+LEFT JOIN public.new_quality_indicators nqi ON nqi.code = m.quality_indicator
+LEFT JOIN public.new_measurement_methods nmm ON nmm.code = m.measurement_method;
+
+
+-- 4) Chemical environment
+CREATE TABLE public.new_substances (
+	id serial4 PRIMARY KEY,
+	name varchar(100) NOT NULL UNIQUE
+);
+
+INSERT INTO public.new_substances(name)
+SELECT DISTINCT substance
+FROM public.equipment_chemical_environment
+WHERE substance IS NOT NULL;
+
+CREATE TABLE public.new_equipment_chemical_environment (
+	id serial4 PRIMARY KEY,
+	equipment_id int4 NOT NULL REFERENCES public.new_equipment(id) ON DELETE CASCADE,
+	contour varchar(50) NULL,
+	environment varchar(200) NULL,
+	substance_id int4 NULL REFERENCES public.new_substances(id) ON DELETE SET NULL,
+	chem_type varchar(50) NULL,
+	mol_percent numeric(10, 6) NULL,
+	CHECK (mol_percent IS NULL OR (mol_percent >= 0 AND mol_percent <= 100))
+);
+
+INSERT INTO public.new_equipment_chemical_environment (
+	equipment_id, contour, environment, substance_id, chem_type, mol_percent
+)
+SELECT
+	ne.id AS equipment_id,
+	ece.contour,
+	ece.environment,
+	ns.id AS substance_id,
+	ece."type" AS chem_type,
+	ece.mol_percent
+FROM public.equipment_chemical_environment ece
+JOIN public.new_installations ni ON ni.name = ece.installation
+JOIN public.new_equipment ne ON ne.name = ece.equipment AND ne.installation_id = ni.id
+LEFT JOIN public.new_substances ns ON ns.name = ece.substance;
+
+
+-- 5) Helpful indexes
+CREATE INDEX idx_new_equipment_installation_name ON public.new_equipment(installation_id, name);
+CREATE INDEX idx_new_components_equipment_name ON public.new_components(equipment_id, name);
+CREATE INDEX idx_new_measurements_component_date ON public.new_measurements(component_id, measurement_date);
+CREATE INDEX idx_new_ece_equipment ON public.new_equipment_chemical_environment(equipment_id);
+
+COMMIT;
+

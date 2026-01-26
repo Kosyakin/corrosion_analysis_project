@@ -1,0 +1,8 @@
+CREATE TABLE public.equipment_operation_dates (
+	id serial4 NOT NULL,
+	installation varchar(50) NOT NULL,
+	equipment varchar(100) NOT NULL,
+	start_date_of_operation date NOT NULL,
+	CONSTRAINT equipment_operation_dates_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_equipment_operation_install_equip ON public.equipment_operation_dates USING btree (installation, equipment);

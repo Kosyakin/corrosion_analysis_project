@@ -1,0 +1,36 @@
+-- public.pipeline_measurements_view исходный текст
+
+CREATE OR REPLACE VIEW public.pipeline_measurements_view
+AS WITH operation_dates AS (
+         SELECT DISTINCT ON (equipment_operation_dates.installation, equipment_operation_dates.equipment) equipment_operation_dates.installation,
+            equipment_operation_dates.equipment,
+            equipment_operation_dates.start_date_of_operation
+           FROM equipment_operation_dates
+          ORDER BY equipment_operation_dates.installation, equipment_operation_dates.equipment, equipment_operation_dates.start_date_of_operation DESC
+        )
+ SELECT m.id,
+    m.installation,
+    m.equipment,
+    m.mms,
+    m.measurement_date,
+    m.measurement,
+        CASE
+            WHEN m.measurement = m.nominal_thickness_mmc THEN true
+            ELSE false
+        END AS is_replaced,
+    od.start_date_of_operation,
+    m.nominal_thickness_mmc,
+    m.tmin_mmc,
+    m.contour,
+    ec.operating_temperature,
+    ec.operating_pressure,
+    m.component,
+    ec.material_code,
+    ec.material_type,
+    ec.outer_diameter,
+    ec.inner_diameter
+   FROM measurements m
+     LEFT JOIN equipment_components ec ON m.installation::text = ec.installation::text AND m.equipment::text = ec.equipment::text AND m.component::text = ec.component::text
+     LEFT JOIN operation_dates od ON m.installation::text = od.installation::text AND m.equipment::text = od.equipment::text
+  WHERE m.measurement_method::text <> 'N'::text AND ec.component_type::text ~~ 'Участок трубопровода'::text AND (m.equipment::text ~~ '%Т-%'::text OR m.equipment::text ~~ '%T-%'::text) AND (ec.source_component IS NOT NULL OR ec.material_code IS NOT NULL OR ec.material_type IS NOT NULL OR ec.component_type IS NOT NULL OR ec.operating_temperature IS NOT NULL OR ec.operating_pressure IS NOT NULL OR ec.outer_diameter IS NOT NULL OR ec.inner_diameter IS NOT NULL OR ec.initial_thickness IS NOT NULL)
+  ORDER BY m.installation, m.equipment, m.mms, m.measurement_date;

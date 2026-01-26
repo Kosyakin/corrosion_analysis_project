@@ -13,6 +13,8 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
       - ./postgres_backup:/backup  # Директория для бэкапов
+    ports:
+      - "5432:5432"
     networks:
       - redmine-network
     restart: unless-stopped

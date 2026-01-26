@@ -1,0 +1,7 @@
+CREATE TABLE public.material_codes (
+	id serial4 NOT NULL,
+	material_code varchar(20) NOT NULL,
+	material_grade varchar(50) NOT NULL,
+	material_type varchar(100) NOT NULL,
+	CONSTRAINT material_codes_pkey PRIMARY KEY (id)
+);

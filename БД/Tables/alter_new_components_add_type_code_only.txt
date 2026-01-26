@@ -1,0 +1,19 @@
+-- Add only numeric component type classification to new_components
+
+ALTER TABLE public.new_components
+ADD COLUMN IF NOT EXISTS component_type_code smallint
+	GENERATED ALWAYS AS (
+		CASE
+			WHEN lower(coalesce(component_type, '')) LIKE '%участок%' THEN 1
+			WHEN lower(coalesce(component_type, '')) LIKE '%отвод%' OR lower(coalesce(name, '')) LIKE 'отвод%' THEN 2
+			WHEN lower(coalesce(component_type, '')) LIKE '%тройник%' THEN 3
+			WHEN lower(coalesce(component_type, '')) LIKE '%переход%' OR lower(coalesce(component_type, '')) LIKE '%редукт%' THEN 4
+			WHEN lower(coalesce(component_type, '')) LIKE '%заглуш%' THEN 5
+			WHEN lower(coalesce(component_type, '')) LIKE '%фланец%' THEN 6
+			WHEN lower(coalesce(component_type, '')) LIKE '%задвиж%' OR lower(coalesce(component_type, '')) LIKE '%клапан%' OR lower(coalesce(component_type, '')) LIKE '%вентиль%' THEN 7
+			ELSE 0
+		END
+	) STORED;
+
+CREATE INDEX IF NOT EXISTS ix_new_components_type_code ON public.new_components (component_type_code);
+

@@ -1,0 +1,354 @@
+-- public.pipeline_corrosion_analysis_new_view исходный текст
+
+CREATE OR REPLACE VIEW public.pipeline_corrosion_analysis_new_view
+AS WITH operation_dates AS (
+         SELECT DISTINCT ON (equipment_operation_dates.installation, equipment_operation_dates.equipment) equipment_operation_dates.installation,
+            equipment_operation_dates.equipment,
+            equipment_operation_dates.start_date_of_operation
+           FROM equipment_operation_dates
+          ORDER BY equipment_operation_dates.installation, equipment_operation_dates.equipment, equipment_operation_dates.start_date_of_operation DESC
+        ), 
+        chemical_components AS (
+         SELECT equipment_chemical_environment.installation,
+            equipment_chemical_environment.equipment,
+            equipment_chemical_environment.contour,
+            max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'Вода'::text THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END) AS water_content,
+            max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'Сероводород'::text THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END) AS h2s_content,
+            max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'Хлор'::text THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END) AS chlorine_content,
+            max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'Диоксид углерода'::text THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END) AS co2_content,
+            max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'Кислород'::text THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END) AS oxygen_content,
+            max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'Соляная кислота'::text THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END) AS hydrochloric_acid_content,
+            max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'Аммиак (NH3)'::text THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END) AS ammonia_content,
+            max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'AMMONIUM CHLORIDE'::text THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END) AS ammonium_chloride_content,
+            max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'Ингибитор коррозии'::text THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END) AS corrosion_inhibitor_content,
+            max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'Едкий натр'::text THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END) AS sodium_hydroxide_content,
+                CASE
+                    WHEN max(
+                    CASE
+                        WHEN equipment_chemical_environment.substance::text = 'Вода'::text THEN equipment_chemical_environment.mol_percent
+                        ELSE NULL::numeric
+                    END) > 0.001 THEN max(
+                    CASE
+                        WHEN equipment_chemical_environment.substance::text = 'Сероводород'::text THEN equipment_chemical_environment.mol_percent
+                        ELSE NULL::numeric
+                    END) / max(
+                    CASE
+                        WHEN equipment_chemical_environment.substance::text = 'Вода'::text THEN equipment_chemical_environment.mol_percent
+                        ELSE NULL::numeric
+                    END)
+                    ELSE 0::numeric
+                END AS h2s_water_ratio,
+            COALESCE(max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'Сероводород'::text THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END), 0::numeric) * COALESCE(max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'Вода'::text THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END), 0::numeric) * 1000::numeric AS h2s_aggressiveness_index,
+            COALESCE(max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'Соляная кислота'::text THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END), 0::numeric) * 8::numeric + COALESCE(max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'Диоксид углерода'::text THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END), 0::numeric) * 3::numeric + COALESCE(max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = ANY (ARRAY['Уксусная кислота'::character varying::text, 'Нафтеновая кислота'::character varying::text]) THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END), 0::numeric) * 5::numeric AS total_acidity_index,
+            COALESCE(max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'Хлор'::text THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END), 0::numeric) * 10::numeric + COALESCE(max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'Соляная кислота'::text THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END), 0::numeric) * 12::numeric AS chloride_aggressiveness,
+            COALESCE(max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'Хлор'::text THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END), 0::numeric) * COALESCE(max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'Вода'::text THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END), 0::numeric) * 100::numeric AS pitting_corrosion_index,
+            COALESCE(max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = ANY (ARRAY['Сероводород'::character varying::text, 'Сера'::character varying::text]) THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END), 0::numeric) * COALESCE(max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'Вода'::text THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END), 0::numeric) * 500::numeric + COALESCE(max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = ANY (ARRAY['AMMONIUM CHLORIDE'::character varying::text, 'Хлор'::character varying::text]) THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END), 0::numeric) * 8::numeric AS underdeposit_corrosion_index,
+            COALESCE(max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'Сероводород'::text THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END), 0::numeric) * 15::numeric + COALESCE(max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'Хлор'::text THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END), 0::numeric) * 12::numeric AS stress_corrosion_index,
+            COALESCE(max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'Ингибитор коррозии'::text THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END), 0::numeric) * 20::numeric + COALESCE(max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'Аммиак (NH3)'::text THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END), 0::numeric) * 3::numeric + COALESCE(max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'Едкий натр'::text THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END), 0::numeric) * 5::numeric AS corrosion_protection_index,
+            count(*) AS total_components,
+            sum(equipment_chemical_environment.mol_percent) AS total_composition,
+            COALESCE(max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = ANY (ARRAY['Сероводород'::character varying::text, 'Сера'::character varying::text, 'Серная кислота'::character varying::text, 'Этилмеркаптан'::character varying::text]) THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END), 0::numeric) AS total_sulfur_compounds,
+            COALESCE(max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = ANY (ARRAY['Соляная кислота'::character varying::text, 'Хлор'::character varying::text]) THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END), 0::numeric) AS total_chlorine_compounds,
+            COALESCE(max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = ANY (ARRAY['Уксусная кислота'::character varying::text, 'Нафтеновая кислота'::character varying::text, 'Диоксид углерода'::character varying::text]) THEN equipment_chemical_environment.mol_percent
+                    ELSE NULL::numeric
+                END), 0::numeric) AS total_acids,
+            COALESCE(max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'Сероводород'::text THEN equipment_chemical_environment.mol_percent * 10::numeric
+                    ELSE NULL::numeric
+                END), 0::numeric) + COALESCE(max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'Хлор'::text THEN equipment_chemical_environment.mol_percent * 5::numeric
+                    ELSE NULL::numeric
+                END), 0::numeric) + COALESCE(max(
+                CASE
+                    WHEN equipment_chemical_environment.substance::text = 'Соляная кислота'::text THEN equipment_chemical_environment.mol_percent * 8::numeric
+                    ELSE NULL::numeric
+                END), 0::numeric) AS corrosion_aggressiveness_index
+           FROM equipment_chemical_environment
+          GROUP BY equipment_chemical_environment.installation, equipment_chemical_environment.equipment, equipment_chemical_environment.contour
+        ), component_types AS (
+         SELECT unique_components.component,
+                CASE
+                    WHEN upper("left"(unique_components.component::text, 3)) = ANY (ARRAY['УЧА'::text, 'Уча'::text, 'УЧ '::text, 'Уч '::text]) THEN 1
+                    WHEN upper("left"(unique_components.component::text, 3)) = ANY (ARRAY['ОТВ'::text, 'Отв'::text, 'От4'::text, 'От9'::text, 'ОТ '::text, 'От '::text]) THEN 2
+                    WHEN upper("left"(unique_components.component::text, 3)) = ANY (ARRAY['ТРО'::text, 'Тр.'::text, 'Тр('::text, 'Тро'::text, 'ТР '::text, 'Тр '::text]) THEN 3
+                    WHEN upper("left"(unique_components.component::text, 3)) = ANY (ARRAY['ПЕР'::text, 'Пер'::text, ' Пе'::text, 'ПЕ '::text, 'Пер'::text]) THEN 4
+                    WHEN upper("left"(unique_components.component::text, 3)) = ANY (ARRAY['ЗАГ'::text, 'Заг'::text, 'ЗА '::text, 'За '::text]) THEN 5
+                    WHEN upper("left"(unique_components.component::text, 3)) = ANY (ARRAY['ГИБ'::text, 'Гиб'::text, 'ГИ '::text, 'Ги '::text]) THEN 6
+                    ELSE 0
+                END AS component_type_id,
+                CASE
+                    WHEN upper("left"(unique_components.component::text, 3)) = ANY (ARRAY['УЧА'::text, 'Уча'::text, 'УЧ '::text, 'Уч '::text]) THEN 'Участок трубопровода'::text
+                    WHEN upper("left"(unique_components.component::text, 3)) = ANY (ARRAY['ОТВ'::text, 'Отв'::text, 'От4'::text, 'От9'::text, 'ОТ '::text, 'От '::text]) THEN 'Отвод'::text
+                    WHEN upper("left"(unique_components.component::text, 3)) = ANY (ARRAY['ТРО'::text, 'Тр.'::text, 'Тр('::text, 'Тро'::text, 'ТР '::text, 'Тр '::text]) THEN 'Тройник'::text
+                    WHEN upper("left"(unique_components.component::text, 3)) = ANY (ARRAY['ПЕР'::text, 'Пер'::text, ' Пе'::text, 'ПЕ '::text, 'Пер'::text]) THEN 'Переходник'::text
+                    WHEN upper("left"(unique_components.component::text, 3)) = ANY (ARRAY['ЗАГ'::text, 'Заг'::text, 'ЗА '::text, 'За '::text]) THEN 'Заглушка'::text
+                    WHEN upper("left"(unique_components.component::text, 3)) = ANY (ARRAY['ГИБ'::text, 'Гиб'::text, 'ГИ '::text, 'Ги '::text]) THEN 'Гиб/Загиб'::text
+                    ELSE 'Неизвестный тип'::text
+                END AS component_type_name
+           FROM ( SELECT DISTINCT measurements.component
+                   FROM measurements) unique_components
+        ), measurement_sequence AS (
+         SELECT m.id,
+            m.installation,
+            m.equipment,
+            m.mms,
+            m.measurement_date,
+            m.measurement,
+            m.contour,
+            od.start_date_of_operation,
+            m.nominal_thickness_mmc,
+            m.tmin_mmc,
+            ec.operating_temperature,
+            ec.operating_pressure,
+            m.component,
+            ec.material_code,
+            ec.material_type,
+            GREATEST(ec.outer_diameter, ec.inner_diameter) AS outer_diameter,
+            LEAST(ec.outer_diameter, ec.inner_diameter) AS inner_diameter,
+                CASE
+                    WHEN ec.material_type::text = 'Аустенитная сталь > 2.25% Mo'::text THEN 10
+                    WHEN ec.material_type::text = 'Аустенитная сталь (без Мо)'::text THEN 8
+                    WHEN ec.material_type::text = 'Сталь легированная Cr 5%'::text THEN 6
+                    WHEN ec.material_type::text = 'Сталь низколегированная'::text THEN 4
+                    WHEN ec.material_type::text = 'Углеродистая сталь 1 Cr 0.5 Mo'::text THEN 3
+                    WHEN ec.material_type::text = 'Углеродистая сталь'::text THEN 2
+                    ELSE 1
+                END AS material_resistance_score,
+            abs(ec.outer_diameter - ec.inner_diameter) AS wall_thickness,
+            GREATEST(ec.outer_diameter, ec.inner_diameter) / 2.0 AS radius,
+            lag(m.measurement) OVER (PARTITION BY m.installation, m.equipment, m.mms ORDER BY m.measurement_date) AS previous_measurement,
+            lag(m.measurement_date) OVER (PARTITION BY m.installation, m.equipment, m.mms ORDER BY m.measurement_date) AS previous_measurement_date,
+                CASE
+                    WHEN m.measurement = m.nominal_thickness_mmc AND (lag(m.measurement) OVER (PARTITION BY m.installation, m.equipment, m.mms ORDER BY m.measurement_date) IS NULL OR lag(m.measurement) OVER (PARTITION BY m.installation, m.equipment, m.mms ORDER BY m.measurement_date) <> m.nominal_thickness_mmc) THEN true
+                    ELSE false
+                END AS is_replacement
+           FROM measurements m
+             LEFT JOIN equipment_components ec ON m.installation::text = ec.installation::text AND m.equipment::text = ec.equipment::text AND m.component::text = ec.component::text
+             LEFT JOIN operation_dates od ON m.installation::text = od.installation::text AND m.equipment::text = od.equipment::text
+          WHERE ec.component_type::text ~~ 'Участок трубопровода'::text AND (m.equipment::text ~~ '%Т-%'::text OR m.equipment::text ~~ '%T-%'::text) AND (ec.source_component IS NOT NULL OR ec.material_code IS NOT NULL OR ec.material_type IS NOT NULL) AND ec.outer_diameter IS NOT NULL AND ec.inner_diameter IS NOT NULL
+        ), replacement_dates AS (
+         SELECT ms_1.installation,
+            ms_1.equipment,
+            ms_1.mms,
+            ms_1.measurement_date,
+            ms_1.measurement,
+            ms_1.is_replacement,
+            max(
+                CASE
+                    WHEN ms_1.is_replacement THEN ms_1.measurement_date
+                    ELSE NULL::date
+                END) OVER (PARTITION BY ms_1.installation, ms_1.equipment, ms_1.mms ORDER BY ms_1.measurement_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS last_replacement_date,
+            COALESCE(max(
+                CASE
+                    WHEN ms_1.is_replacement THEN ms_1.measurement_date
+                    ELSE NULL::date
+                END) OVER (PARTITION BY ms_1.installation, ms_1.equipment, ms_1.mms ORDER BY ms_1.measurement_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), ms_1.start_date_of_operation) AS effective_start_date
+           FROM measurement_sequence ms_1
+        )
+ SELECT ms.id,
+    ms.installation,
+    ms.equipment,
+    ms.mms,
+    ms.measurement_date,
+    ms.measurement,
+    ms.is_replacement AS is_replaced,
+        CASE
+            WHEN ms.previous_measurement IS NOT NULL AND ms.previous_measurement_date IS NOT NULL AND ms.measurement_date > ms.previous_measurement_date THEN
+            CASE
+                WHEN ms.previous_measurement = ms.measurement THEN 0.0
+                WHEN ms.previous_measurement > ms.measurement THEN (ms.previous_measurement - ms.measurement) / GREATEST((ms.measurement_date - ms.previous_measurement_date)::numeric / 365.25, 0.00274)
+                ELSE 0.0
+            END
+            ELSE NULL::numeric
+        END AS corrosion_rate_mm_per_year,
+        CASE
+            WHEN rd.effective_start_date IS NOT NULL THEN (ms.measurement_date - rd.effective_start_date)::numeric / 365.25
+            ELSE NULL::numeric
+        END AS equipment_age_years,
+    rd.last_replacement_date,
+    rd.effective_start_date,
+    ct.component_type_id,
+    ct.component_type_name,
+    ms.wall_thickness,
+    ms.radius,
+    ms.outer_diameter,
+    ms.inner_diameter,
+        CASE
+            WHEN ms.wall_thickness > 0::numeric THEN ms.outer_diameter / ms.wall_thickness
+            ELSE NULL::numeric
+        END AS diameter_to_thickness_ratio,
+    pi() * power(ms.outer_diameter / 2.0, 2::numeric)::double precision - pi() * power(ms.inner_diameter / 2.0, 2::numeric)::double precision AS cross_sectional_area,
+    cc.water_content,
+    cc.h2s_content,
+    cc.chlorine_content,
+    cc.co2_content,
+    cc.oxygen_content,
+    cc.hydrochloric_acid_content,
+    cc.ammonia_content,
+    cc.corrosion_inhibitor_content,
+    cc.total_sulfur_compounds,
+    cc.total_chlorine_compounds,
+    cc.total_acids,
+    cc.corrosion_aggressiveness_index,
+    cc.h2s_water_ratio,
+    cc.h2s_aggressiveness_index,
+    cc.total_acidity_index,
+    cc.chloride_aggressiveness,
+    cc.pitting_corrosion_index,
+    cc.underdeposit_corrosion_index,
+    cc.stress_corrosion_index,
+    cc.corrosion_protection_index,
+    ms.start_date_of_operation,
+    ms.nominal_thickness_mmc,
+    ms.tmin_mmc,
+    ms.contour,
+    ms.operating_temperature,
+    ms.operating_pressure,
+    ms.component,
+    ms.material_code,
+    ms.material_type,
+    ms.material_resistance_score,
+        CASE
+            WHEN ms.wall_thickness < 5::numeric THEN 1
+            WHEN ms.wall_thickness >= 5::numeric AND ms.wall_thickness <= 8::numeric THEN 2
+            WHEN ms.wall_thickness >= 8::numeric AND ms.wall_thickness <= 12::numeric THEN 3
+            WHEN ms.wall_thickness >= 12::numeric AND ms.wall_thickness <= 16::numeric THEN 4
+            WHEN ms.wall_thickness >= 16::numeric AND ms.wall_thickness <= 20::numeric THEN 5
+            WHEN ms.wall_thickness >= 20::numeric AND ms.wall_thickness <= 30::numeric THEN 6
+            ELSE 7
+        END AS thickness_category,
+        CASE
+            WHEN ms.outer_diameter < 50::numeric THEN 1
+            WHEN ms.outer_diameter >= 50::numeric AND ms.outer_diameter <= 100::numeric THEN 2
+            WHEN ms.outer_diameter >= 100::numeric AND ms.outer_diameter <= 200::numeric THEN 3
+            WHEN ms.outer_diameter >= 200::numeric AND ms.outer_diameter <= 300::numeric THEN 4
+            WHEN ms.outer_diameter >= 300::numeric AND ms.outer_diameter <= 500::numeric THEN 5
+            WHEN ms.outer_diameter >= 500::numeric AND ms.outer_diameter <= 1000::numeric THEN 6
+            ELSE 7
+        END AS diameter_category
+   FROM measurement_sequence ms
+     LEFT JOIN replacement_dates rd ON ms.installation::text = rd.installation::text AND ms.equipment::text = rd.equipment::text AND ms.mms::text = rd.mms::text AND ms.measurement_date = rd.measurement_date
+     LEFT JOIN chemical_components cc ON ms.installation::text = cc.installation::text AND ms.equipment::text = cc.equipment::text AND ms.contour::text = cc.contour::text
+     LEFT JOIN component_types ct ON ms.component::text = ct.component::text
+  WHERE ms.wall_thickness > 0::numeric
+  ORDER BY ms.installation, ms.equipment, ms.mms, ms.measurement_date;

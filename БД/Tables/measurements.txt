@@ -1,0 +1,16 @@
+CREATE TABLE public.measurements (
+	id serial4 NOT NULL,
+	installation varchar(50) NULL,
+	equipment varchar(100) NULL,
+	mms varchar(50) NULL,
+	measurement numeric(5, 1) NULL,
+	contour varchar(50) NULL,
+	measurement_date date NULL,
+	quality_indicator varchar(10) NULL,
+	measurement_method varchar(10) NULL,
+	component varchar(100) NULL,
+	nominal_thickness_mmc numeric(5, 1) NULL,
+	tmin_mmc numeric(5, 1) NULL,
+	CONSTRAINT measurements_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_equipment_2 ON public.measurements USING btree (installation, equipment);

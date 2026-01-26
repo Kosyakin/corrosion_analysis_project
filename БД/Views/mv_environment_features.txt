@@ -1,0 +1,68 @@
+DROP MATERIALIZED VIEW IF EXISTS public.mv_environment_features;
+
+CREATE MATERIALIZED VIEW public.mv_environment_features AS
+WITH canon AS (
+	SELECT
+		ne.installation_id,
+		ne.id AS equipment_id,
+		ece.contour,
+		lower(trim(ns.name)) AS substance,
+		ece.mol_percent
+	FROM public.new_equipment_chemical_environment ece
+	JOIN public.new_equipment ne ON ne.id = ece.equipment_id
+	LEFT JOIN public.new_substances ns ON ns.id = ece.substance_id
+)
+SELECT
+	installation_id,
+	equipment_id,
+	contour,
+	max(CASE WHEN substance = 'вода' THEN mol_percent END) AS water_content,
+	max(CASE WHEN substance = 'сероводород' THEN mol_percent END) AS h2s_content,
+	max(CASE WHEN substance = 'хлор' THEN mol_percent END) AS chlorine_content,
+	max(CASE WHEN substance = 'диоксид углерода' THEN mol_percent END) AS co2_content,
+	max(CASE WHEN substance = 'кислород' THEN mol_percent END) AS oxygen_content,
+	max(CASE WHEN substance = 'соляная кислота' THEN mol_percent END) AS hydrochloric_acid_content,
+	max(CASE WHEN substance IN ('аммиак (nh3)','аммиак') THEN mol_percent END) AS ammonia_content,
+	max(CASE WHEN substance = 'ammonium chloride' THEN mol_percent END) AS ammonium_chloride_content,
+	max(CASE WHEN substance = 'ингибитор коррозии' THEN mol_percent END) AS corrosion_inhibitor_content,
+	max(CASE WHEN substance LIKE 'едкий натр%' THEN mol_percent END) AS sodium_hydroxide_content,
+	CASE
+		WHEN COALESCE(max(CASE WHEN substance = 'вода' THEN mol_percent END), 0) > 0.001
+			THEN max(CASE WHEN substance = 'сероводород' THEN mol_percent END) / max(CASE WHEN substance = 'вода' THEN mol_percent END)
+		ELSE 0
+	END AS h2s_water_ratio,
+	COALESCE(max(CASE WHEN substance = 'сероводород' THEN mol_percent END), 0)
+		* COALESCE(max(CASE WHEN substance = 'вода' THEN mol_percent END), 0) * 1000 AS h2s_aggressiveness_index,
+	COALESCE(max(CASE WHEN substance = 'соляная кислота' THEN mol_percent END), 0) * 8
+		+ COALESCE(max(CASE WHEN substance = 'диоксид углерода' THEN mol_percent END), 0) * 3
+		+ COALESCE(max(CASE WHEN substance IN ('уксусная кислота', 'нафтеновая кислота') THEN mol_percent END), 0) * 5 AS total_acidity_index,
+	COALESCE(max(CASE WHEN substance = 'хлор' THEN mol_percent END), 0) * 10
+		+ COALESCE(max(CASE WHEN substance = 'соляная кислота' THEN mol_percent END), 0) * 12 AS chloride_aggressiveness,
+	COALESCE(max(CASE WHEN substance = 'хлор' THEN mol_percent END), 0)
+		* COALESCE(max(CASE WHEN substance = 'вода' THEN mol_percent END), 0) * 100 AS pitting_corrosion_index,
+	COALESCE(max(CASE WHEN substance IN ('сероводород','сера') THEN mol_percent END), 0)
+		* COALESCE(max(CASE WHEN substance = 'вода' THEN mol_percent END), 0) * 500
+		+ COALESCE(max(CASE WHEN substance IN ('ammonium chloride','хлор') THEN mol_percent END), 0) * 8 AS underdeposit_corrosion_index,
+	COALESCE(max(CASE WHEN substance = 'сероводород' THEN mol_percent END), 0) * 15
+		+ COALESCE(max(CASE WHEN substance = 'хлор' THEN mol_percent END), 0) * 12 AS stress_corrosion_index,
+	COALESCE(max(CASE WHEN substance = 'ингибитор коррозии' THEN mol_percent END), 0) * 20
+		+ COALESCE(max(CASE WHEN substance IN ('аммиак (nh3)','аммиак') THEN mol_percent END), 0) * 3
+		+ COALESCE(max(CASE WHEN substance LIKE 'едкий натр%' THEN mol_percent END), 0) * 5 AS corrosion_protection_index,
+	count(*) AS total_components,
+	sum(mol_percent) AS total_composition,
+	COALESCE(max(CASE WHEN substance IN ('сероводород','сера','серная кислота','этилмеркаптан') THEN mol_percent END), 0) AS total_sulfur_compounds,
+	COALESCE(max(CASE WHEN substance IN ('соляная кислота','хлор') THEN mol_percent END), 0) AS total_chlorine_compounds,
+	COALESCE(max(CASE WHEN substance IN ('уксусная кислота','нафтеновая кислота','диоксид углерода') THEN mol_percent END), 0) AS total_acids,
+	COALESCE(max(CASE WHEN substance = 'сероводород' THEN mol_percent * 10 END), 0)
+		+ COALESCE(max(CASE WHEN substance = 'хлор' THEN mol_percent * 5 END), 0)
+		+ COALESCE(max(CASE WHEN substance = 'соляная кислота' THEN mol_percent * 8 END), 0) AS corrosion_aggressiveness_index
+FROM canon
+GROUP BY installation_id, equipment_id, contour;
+
+-- Unique index to allow REFRESH CONCURRENTLY
+CREATE UNIQUE INDEX ux_mv_environment_features ON public.mv_environment_features (equipment_id, contour);
+CREATE INDEX ix_mv_environment_features_install ON public.mv_environment_features (installation_id, equipment_id, contour);
+
+-- Example refresh:
+-- REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_environment_features;
+

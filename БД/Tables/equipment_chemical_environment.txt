@@ -1,0 +1,12 @@
+CREATE TABLE public.equipment_chemical_environment (
+	id int4 DEFAULT nextval('"equipment_сhemical_environment_id_seq"'::regclass) NOT NULL,
+	installation varchar(50) NULL,
+	equipment varchar(100) NULL,
+	contour varchar(50) NULL,
+	environment varchar(200) NULL,
+	substance varchar(100) NULL,
+	"type" varchar(50) NULL,
+	mol_percent numeric(10, 6) NULL,
+	factory varchar(255) NULL,
+	CONSTRAINT equipment_сhemical_environment_pkey PRIMARY KEY (id)
+);

@@ -1,0 +1,48 @@
+-- Add computed geometry fields and numeric component type classification to new_components
+
+ALTER TABLE public.new_components
+ADD COLUMN calc_inner_diameter numeric(8, 1)
+	GENERATED ALWAYS AS (
+		CASE
+			WHEN inner_diameter IS NOT NULL THEN inner_diameter
+			WHEN outer_diameter IS NOT NULL AND initial_thickness IS NOT NULL
+				THEN GREATEST(outer_diameter - 2 * initial_thickness, 0)
+			ELSE NULL
+		END
+	) STORED,
+ADD COLUMN nominal_d_over_t numeric(12, 4)
+	GENERATED ALWAYS AS (
+		CASE
+			WHEN outer_diameter IS NOT NULL AND initial_thickness IS NOT NULL AND initial_thickness > 0
+				THEN outer_diameter / initial_thickness
+			ELSE NULL
+		END
+	) STORED,
+ADD COLUMN cross_section_area_mm2 numeric(18, 4)
+	GENERATED ALWAYS AS (
+		CASE
+			WHEN outer_diameter IS NOT NULL THEN
+				-- pi/4 * (OD^2 - ID^2)
+				(pi()::numeric * (outer_diameter * outer_diameter - COALESCE(calc_inner_diameter, 0) * COALESCE(calc_inner_diameter, 0))) / 4
+			ELSE NULL
+		END
+	) STORED,
+ADD COLUMN component_type_code smallint
+	GENERATED ALWAYS AS (
+		CASE
+			/* normalize both fields to lowercase once per WHEN using repeated expression */
+			WHEN lower(coalesce(component_type, '')) LIKE '%участок%' THEN 1
+			WHEN lower(coalesce(component_type, '')) LIKE '%отвод%' OR lower(coalesce(name, '')) LIKE 'отвод%' THEN 2
+			WHEN lower(coalesce(component_type, '')) LIKE '%тройник%' THEN 3
+			WHEN lower(coalesce(component_type, '')) LIKE '%переход%' OR lower(coalesce(component_type, '')) LIKE '%редукт%' THEN 4
+			WHEN lower(coalesce(component_type, '')) LIKE '%заглуш%' THEN 5
+			WHEN lower(coalesce(component_type, '')) LIKE '%фланец%' THEN 6
+			WHEN lower(coalesce(component_type, '')) LIKE '%задвиж%' OR lower(coalesce(component_type, '')) LIKE '%клапан%' OR lower(coalesce(component_type, '')) LIKE '%вентиль%' THEN 7
+			ELSE 0
+		END
+	) STORED;
+
+-- Helpful indexes
+CREATE INDEX IF NOT EXISTS ix_new_components_type_code ON public.new_components (component_type_code);
+CREATE INDEX IF NOT EXISTS ix_new_components_nominal_dt ON public.new_components (nominal_d_over_t);
+

@@ -1,0 +1,97 @@
+CREATE OR REPLACE VIEW public.pipeline_corrosion_rates_view AS
+WITH base AS (
+	SELECT
+		ni.id AS installation_id,
+		ni.name AS installation,
+		ne.id AS equipment_id,
+		ne.name AS equipment,
+		nc.id AS component_id,
+		nc.name AS component,
+		nm.mms,
+		nm.measurement_date AS curr_measurement_date,
+		nm.measurement AS curr_thickness,
+		LAG(nm.measurement_date) OVER (
+			PARTITION BY ne.id, nc.id, nm.mms
+			ORDER BY nm.measurement_date, nm.id
+		) AS prev_measurement_date,
+		LAG(nm.measurement) OVER (
+			PARTITION BY ne.id, nc.id, nm.mms
+			ORDER BY nm.measurement_date, nm.id
+		) AS prev_thickness,
+		LAG(nm.measurement_date, 2) OVER (
+			PARTITION BY ne.id, nc.id, nm.mms
+			ORDER BY nm.measurement_date, nm.id
+		) AS prev2_measurement_date,
+		LAG(nm.measurement, 2) OVER (
+			PARTITION BY ne.id, nc.id, nm.mms
+			ORDER BY nm.measurement_date, nm.id
+		) AS prev2_thickness,
+		nm.nominal_thickness_mmc,
+		nm.tmin_mmc,
+		nc.initial_thickness,
+		nc.component_type
+	FROM public.new_measurements nm
+	JOIN public.new_components nc ON nc.id = nm.component_id
+	JOIN public.new_equipment ne ON ne.id = nc.equipment_id
+	JOIN public.new_installations ni ON ni.id = ne.installation_id
+	LEFT JOIN public.new_measurement_methods nmm ON nmm.id = nm.measurement_method_id
+	WHERE COALESCE(UPPER(nmm.code), '') <> 'N'
+		AND nc.component_type = 'Участок трубопровода'
+		AND (
+			ne.name ILIKE '%Т-%' OR ne.name ILIKE '%T-%'
+		)
+),
+derived AS (
+	SELECT
+		b.*,
+		COALESCE(b.nominal_thickness_mmc, b.initial_thickness) AS nominal_eff,
+		b.tmin_mmc AS tmin_eff,
+		EXTRACT(EPOCH FROM (b.curr_measurement_date::timestamp - b.prev_measurement_date::timestamp)) / 31557600.0 AS delta_years,
+		EXTRACT(EPOCH FROM (b.prev_measurement_date::timestamp - b.prev2_measurement_date::timestamp)) / 31557600.0 AS delta_years_prev
+	FROM base b
+),
+rates AS (
+	SELECT
+		d.*,
+		CASE
+			WHEN d.prev_measurement_date IS NULL OR d.delta_years IS NULL OR d.delta_years <= 0 THEN NULL
+			ELSE (d.prev_thickness - d.curr_thickness) / d.delta_years
+		END AS corr_rate_mm_per_year,
+		CASE
+			WHEN d.prev2_measurement_date IS NULL OR d.delta_years_prev IS NULL OR d.delta_years_prev <= 0 THEN NULL
+			ELSE (d.prev2_thickness - d.prev_thickness) / d.delta_years_prev
+		END AS prev_corr_rate_mm_per_year
+	FROM derived d
+),
+flagged AS (
+	SELECT
+		r.*,
+		CASE
+			WHEN r.nominal_eff IS NOT NULL
+				AND r.tmin_eff IS NOT NULL
+				AND r.prev_thickness IS NOT NULL
+				AND r.curr_thickness >= 0.95 * r.nominal_eff
+				AND ABS(r.prev_thickness - r.curr_thickness) > (r.nominal_eff - r.tmin_eff) / 2.0
+				AND COALESCE(r.prev_corr_rate_mm_per_year, 0) > 0
+			THEN TRUE ELSE FALSE
+		END AS is_replacement
+	FROM rates r
+)
+SELECT
+	installation_id,
+	installation,
+	equipment_id,
+	equipment,
+	component_id,
+	component,
+	mms,
+	prev_measurement_date,
+	curr_measurement_date,
+	prev_thickness AS prev_thickness_mm,
+	curr_thickness AS curr_thickness_mm,
+	corr_rate_mm_per_year
+FROM flagged
+WHERE is_replacement = FALSE
+	AND prev_measurement_date IS NOT NULL
+ORDER BY installation, equipment, mms, curr_measurement_date;
+

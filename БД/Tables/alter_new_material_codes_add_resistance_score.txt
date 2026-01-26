@@ -1,0 +1,72 @@
+-- Adds a computed corrosion resistance class to new_material_codes
+-- Safe to run multiple times if you guard with existence checks in your tooling.
+
+ALTER TABLE public.new_material_codes
+ADD COLUMN material_resistance_score smallint
+GENERATED ALWAYS AS (
+	CASE
+		/* Normalize: combine type and grade, lowercase, collapse spaces */
+		/* We'll repeat the expression in each WHEN to stay within a single expression context */
+		WHEN lower(regexp_replace(coalesce(material_type,'') || ' ' || coalesce(material_grade,''), '\s+', ' ', 'g')) LIKE '%монел%'
+		  OR lower(regexp_replace(coalesce(material_type,'') || ' ' || coalesce(material_grade,''), '\s+', ' ', 'g')) LIKE '%cu-ni%'
+		  OR lower(regexp_replace(coalesce(material_type,'') || ' ' || coalesce(material_grade,''), '\s+', ' ', 'g')) LIKE '%cu ni%'
+		  OR lower(regexp_replace(coalesce(material_type,'') || ' ' || coalesce(material_grade,''), '\s+', ' ', 'g')) LIKE '%nickel%'
+		THEN 9
+
+		/* Austenitic stainless with Mo >~2.25% (e.g., 316/316L/317) */
+		WHEN (
+			lower(regexp_replace(coalesce(material_type,'') || ' ' || coalesce(material_grade,''), '\s+', ' ', 'g')) LIKE '%аустенит%'
+			OR lower(regexp_replace(coalesce(material_type,'') || ' ' || coalesce(material_grade,''), '\s+', ' ', 'g')) LIKE '%austenit%'
+		) AND (
+			lower(regexp_replace(coalesce(material_grade,''), '\s+', ' ', 'g')) ~ '(^|[^0-9])316(l)?([^0-9]|$)'
+			OR lower(regexp_replace(coalesce(material_grade,''), '\s+', ' ', 'g')) ~ '(^|[^0-9])317(l)?([^0-9]|$)'
+			OR lower(regexp_replace(coalesce(material_type,'') || ' ' || coalesce(material_grade,''), '\s+', ' ', 'g')) ~ '>\s*2\.?25% *mo'
+		)
+		THEN 10
+
+		/* Austenitic stainless (general) */
+		WHEN lower(regexp_replace(coalesce(material_type,'') || ' ' || coalesce(material_grade,''), '\s+', ' ', 'g')) LIKE '%аустенит%'
+		  OR lower(regexp_replace(coalesce(material_type,'') || ' ' || coalesce(material_grade,''), '\s+', ' ', 'g')) LIKE '%austenit%'
+		THEN 8
+
+		/* Ferritic stainless */
+		WHEN lower(regexp_replace(coalesce(material_type,'') || ' ' || coalesce(material_grade,''), '\s+', ' ', 'g')) LIKE '%феррит%нержав%'
+		THEN 7
+
+		/* Cr-Mo 9% or 5% */
+		WHEN lower(regexp_replace(coalesce(material_type,'') || ' ' || coalesce(material_grade,''), '\s+', ' ', 'g')) LIKE '%cr 9%'
+		  OR lower(regexp_replace(coalesce(material_type,'') || ' ' || coalesce(material_grade,''), '\s+', ' ', 'g')) LIKE '%cr9%'
+		  OR lower(regexp_replace(coalesce(material_type,'') || ' ' || coalesce(material_grade,''), '\s+', ' ', 'g')) LIKE '%х9%'
+		  OR lower(regexp_replace(coalesce(material_type,'') || ' ' || coalesce(material_grade,''), '\s+', ' ', 'g')) LIKE '%cr 5%'
+		  OR lower(regexp_replace(coalesce(material_type,'') || ' ' || coalesce(material_grade,''), '\s+', ' ', 'g')) LIKE '%cr5%'
+		  OR lower(regexp_replace(coalesce(material_type,'') || ' ' || coalesce(material_grade,''), '\s+', ' ', 'g')) LIKE '%х5%'
+		THEN 6
+
+		/* Cr-Mo 2.25% / 1.25% */
+		WHEN lower(regexp_replace(coalesce(material_type,'') || ' ' || coalesce(material_grade,''), '\s+', ' ', 'g')) LIKE '%2.25 cr 1 mo%'
+		  OR lower(regexp_replace(coalesce(material_type,'') || ' ' || coalesce(material_grade,''), '\s+', ' ', 'g')) LIKE '%2,25 cr 1 mo%'
+		  OR lower(regexp_replace(coalesce(material_type,'') || ' ' || coalesce(material_grade,''), '\s+', ' ', 'g')) LIKE '%2.25cr 1mo%'
+		THEN 5
+		WHEN lower(regexp_replace(coalesce(material_type,'') || ' ' || coalesce(material_grade,''), '\s+', ' ', 'g')) LIKE '%1.25 cr 0.5 mo%'
+		  OR lower(regexp_replace(coalesce(material_type,'') || ' ' || coalesce(material_grade,''), '\s+', ' ', 'g')) LIKE '%1,25 cr 0.5 mo%'
+		  OR lower(regexp_replace(coalesce(material_type,'') || ' ' || coalesce(material_grade,''), '\s+', ' ', 'g')) LIKE '%1.25cr 0.5mo%'
+		THEN 4
+
+		/* Low alloy */
+		WHEN lower(regexp_replace(coalesce(material_type,''), '\s+', ' ', 'g')) LIKE '%низколегированн%'
+		THEN 4
+
+		/* Carbon steel */
+		WHEN lower(regexp_replace(coalesce(material_type,'') || ' ' || coalesce(material_grade,''), '\s+', ' ', 'g')) LIKE '%углеродистая%'
+		  OR lower(regexp_replace(coalesce(material_type,'') || ' ' || coalesce(material_grade,''), '\s+', ' ', 'g')) LIKE '%углер.%'
+		  OR lower(regexp_replace(coalesce(material_grade,''), '\s+', ' ', 'g')) LIKE '%st3%'
+		THEN 2
+
+		/* Default/unknown */
+		ELSE 1
+	END
+) STORED;
+
+CREATE INDEX IF NOT EXISTS ix_new_material_codes_resistance_score
+	ON public.new_material_codes (material_resistance_score);
+

@@ -1,0 +1,81 @@
+DROP MATERIALIZED VIEW IF EXISTS public.mv_ml_pipeline_training_set;
+DROP MATERIALIZED VIEW IF EXISTS public.mv_ml_pipeline_feature_store;
+
+CREATE MATERIALIZED VIEW public.mv_ml_pipeline_training_set AS
+SELECT
+	-- Keys and time
+	wc.installation_id,
+	wc.equipment_id,
+	wc.component_id,
+	wc.contour,
+	wc.mms_section,
+	wc.mms_point,
+	wc.curr_measurement_date,
+	-- Target and base measurements
+	wc.prev_measurement_date,
+	wc.prev_thickness_mm,
+	wc.curr_thickness_mm,
+	wc.corr_rate_mm_per_year,
+	-- Component features
+	nc.component_type_code,
+	nc.component_type,
+	nc.outer_diameter,
+	nc.inner_diameter,
+	nc.initial_thickness,
+	nc.cross_section_area_mm2,
+	nc.material_code_id,
+	-- Material features
+	nmc.material_code,
+	nmc.material_grade,
+	nmc.material_type,
+	nmc.material_resistance_score,
+	-- Environment features (may be NULL if no contour-level data)
+	env.water_content,
+	env.h2s_content,
+	env.chlorine_content,
+	env.co2_content,
+	env.oxygen_content,
+	env.hydrochloric_acid_content,
+	env.ammonia_content,
+	env.ammonium_chloride_content,
+	env.corrosion_inhibitor_content,
+	env.sodium_hydroxide_content,
+	env.h2s_water_ratio,
+	env.h2s_aggressiveness_index,
+	env.total_acidity_index,
+	env.chloride_aggressiveness,
+	env.pitting_corrosion_index,
+	env.underdeposit_corrosion_index,
+	env.stress_corrosion_index,
+	env.corrosion_protection_index,
+	env.total_components,
+	env.total_composition,
+	env.total_sulfur_compounds,
+	env.total_chlorine_compounds,
+	env.total_acids,
+	env.corrosion_aggressiveness_index
+FROM public.pipeline_corrosion_worst_case_new_view wc
+JOIN public.new_components nc ON nc.id = wc.component_id
+LEFT JOIN public.new_material_codes nmc ON nmc.id = nc.material_code_id
+LEFT JOIN public.mv_environment_features env
+	ON env.equipment_id = wc.equipment_id AND env.contour = wc.contour;
+
+-- Unique index for CONCURRENT REFRESH
+CREATE UNIQUE INDEX ux_mv_ml_pipeline_training_set_key
+	ON public.mv_ml_pipeline_training_set (equipment_id, component_id, contour, mms_section, mms_point, curr_measurement_date);
+
+-- Helpful indices for filtering
+CREATE INDEX ix_mv_ml_pipeline_training_set_ids_date
+	ON public.mv_ml_pipeline_training_set (installation_id, equipment_id, curr_measurement_date);
+CREATE INDEX ix_mv_ml_pipeline_training_set_type_material
+	ON public.mv_ml_pipeline_training_set (component_type_code, material_resistance_score);
+
+-- Backward-compatible view name (optional)
+CREATE OR REPLACE VIEW public.mv_pipeline_features AS
+SELECT * FROM public.mv_ml_pipeline_training_set;
+CREATE OR REPLACE VIEW public.mv_ml_pipeline_feature_store AS
+SELECT * FROM public.mv_ml_pipeline_training_set;
+
+-- Example refresh:
+-- REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_ml_pipeline_training_set;
+

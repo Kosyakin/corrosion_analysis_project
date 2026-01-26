@@ -1,0 +1,80 @@
+DROP MATERIALIZED VIEW IF EXISTS public.mv_pipeline_corrosion_base;
+
+CREATE MATERIALIZED VIEW public.mv_pipeline_corrosion_base AS
+WITH base AS (
+	SELECT
+		nm.id AS measurement_id,
+		ni.id AS installation_id,
+		ni.name AS installation,
+		ne.id AS equipment_id,
+		ne.name AS equipment,
+		nc.id AS component_id,
+		nc.name AS component,
+		nm.contour,
+		nm.mms,
+		nm.measurement_date AS curr_measurement_date,
+		nm.measurement AS curr_thickness,
+		LAG(nm.measurement_date) OVER (
+			PARTITION BY ne.id, nc.id, nm.mms
+			ORDER BY nm.measurement_date, nm.id
+		) AS prev_measurement_date,
+		LAG(nm.measurement) OVER (
+			PARTITION BY ne.id, nc.id, nm.mms
+			ORDER BY nm.measurement_date, nm.id
+		) AS prev_thickness,
+		LAG(nm.measurement_date, 2) OVER (
+			PARTITION BY ne.id, nc.id, nm.mms
+			ORDER BY nm.measurement_date, nm.id
+		) AS prev2_measurement_date,
+		LAG(nm.measurement, 2) OVER (
+			PARTITION BY ne.id, nc.id, nm.mms
+			ORDER BY nm.measurement_date, nm.id
+		) AS prev2_thickness,
+		nm.nominal_thickness_mmc,
+		nm.tmin_mmc,
+		nc.initial_thickness,
+		nc.component_type,
+		nmm.code AS measurement_method_code
+	FROM public.new_measurements nm
+	JOIN public.new_components nc ON nc.id = nm.component_id
+	JOIN public.new_equipment ne ON ne.id = nc.equipment_id
+	JOIN public.new_installations ni ON ni.id = ne.installation_id
+	LEFT JOIN public.new_measurement_methods nmm ON nmm.id = nm.measurement_method_id
+	WHERE nc.component_type = 'Участок трубопровода'
+),
+derived AS (
+	SELECT
+		b.*,
+		EXTRACT(EPOCH FROM (b.curr_measurement_date::timestamp - b.prev_measurement_date::timestamp)) / 31557600.0 AS delta_years
+	FROM base b
+)
+SELECT
+	d.*,
+	CASE
+		WHEN d.prev_measurement_date IS NULL OR d.delta_years IS NULL OR d.delta_years <= 0
+			THEN NULL
+		ELSE (d.prev_thickness - d.curr_thickness) / d.delta_years
+	END AS corr_rate_mm_per_year
+FROM derived d
+WHERE d.prev_measurement_date IS NOT NULL
+	AND d.delta_years > 0;
+
+-- Unique index required for REFRESH MATERIALIZED VIEW CONCURRENTLY
+CREATE UNIQUE INDEX ux_mv_pipeline_corrosion_base_measurement_id
+	ON public.mv_pipeline_corrosion_base (measurement_id);
+
+-- Helpful query index
+CREATE INDEX ix_mv_pipeline_corrosion_base_lookup
+	ON public.mv_pipeline_corrosion_base (installation, equipment, component, mms, curr_measurement_date);
+
+-- Optional: id-based lookup index for joins
+CREATE INDEX ix_mv_pipeline_corrosion_base_ids
+	ON public.mv_pipeline_corrosion_base (installation_id, equipment_id, component_id, mms, curr_measurement_date);
+
+-- Join-friendly index with contour
+CREATE INDEX ix_mv_pipeline_corrosion_base_contour
+	ON public.mv_pipeline_corrosion_base (equipment_id, contour, mms, curr_measurement_date);
+
+-- Example refresh (run when needed):
+-- REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_pipeline_corrosion_base;
+

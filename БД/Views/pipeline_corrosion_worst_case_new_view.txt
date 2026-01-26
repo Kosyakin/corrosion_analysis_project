@@ -1,0 +1,72 @@
+CREATE OR REPLACE VIEW public.pipeline_corrosion_worst_case_new_view AS
+WITH grouped AS (
+	SELECT
+
+		mvb.installation_id,
+		mvb.installation,
+		mvb.equipment_id,
+		mvb.equipment,
+		mvb.component_id,
+		mvb.component,
+		mvb.contour,
+		SPLIT_PART(mvb.mms, '.', 1) AS mms_section,
+		mvb.mms AS mms_point,
+		mvb.curr_measurement_date,
+		mvb.prev_measurement_date,
+		mvb.prev_thickness,
+		mvb.curr_thickness,
+		mvb.corr_rate_mm_per_year,
+		mvb.measurement_method_code,
+		mvb.measurement_id,
+		ROW_NUMBER() OVER (
+			PARTITION BY mvb.installation, mvb.equipment, mvb.component, mvb.contour, SPLIT_PART(mvb.mms, '.', 1), mvb.curr_measurement_date
+			ORDER BY mvb.corr_rate_mm_per_year DESC NULLS LAST, mvb.mms, mvb.measurement_id
+		) AS rn
+	FROM public.mv_pipeline_corrosion_base mvb
+)
+SELECT
+	g.installation_id,
+	g.installation,
+	g.equipment_id,
+	g.equipment,
+	g.component_id,
+	g.component,
+	g.contour,
+	g.mms_section,
+	g.mms_point,
+	g.prev_measurement_date,
+	g.curr_measurement_date,
+	g.prev_thickness AS prev_thickness_mm,
+	g.curr_thickness AS curr_thickness_mm,
+	g.corr_rate_mm_per_year,
+	-- Environment features (joined by equipment+contour)
+	env.water_content,
+	env.h2s_content,
+	env.chlorine_content,
+	env.co2_content,
+	env.oxygen_content,
+	env.hydrochloric_acid_content,
+	env.ammonia_content,
+	env.ammonium_chloride_content,
+	env.corrosion_inhibitor_content,
+	env.sodium_hydroxide_content,
+	env.h2s_water_ratio,
+	env.h2s_aggressiveness_index,
+	env.total_acidity_index,
+	env.chloride_aggressiveness,
+	env.pitting_corrosion_index,
+	env.underdeposit_corrosion_index,
+	env.stress_corrosion_index,
+	env.corrosion_protection_index,
+	env.total_components,
+	env.total_composition,
+	env.total_sulfur_compounds,
+	env.total_chlorine_compounds,
+	env.total_acids,
+	env.corrosion_aggressiveness_index
+FROM grouped g
+LEFT JOIN public.mv_environment_features env
+	ON env.equipment_id = g.equipment_id AND env.contour = g.contour
+WHERE g.rn = 1
+ORDER BY g.installation_id ASC, g.equipment_id ASC, g.contour ASC, g.mms_section ASC, g.mms_point ASC, g.curr_measurement_date ASC;
+
