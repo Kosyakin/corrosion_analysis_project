@@ -33,27 +33,6 @@ except ImportError:
 def load_corrosion_data():
     """Загрузка данных из представления"""
     engine = create_engine(CONNECTION_STRING)
-    query = "SELECT * FROM pipeline_corrosion_analysis_view"
-    df = pd.read_sql(query, engine)
-    return df
-
-def load_corrosion_data_new():
-    """Загрузка данных из представления"""
-    engine = create_engine(CONNECTION_STRING)
-    query = "SELECT * FROM pipeline_corrosion_worst_case_view"
-    df = pd.read_sql(query, engine)
-    return df
-
-
-def load_raw_data():
-    """Загрузка сырых данных для глубокого анализа"""
-    engine = create_engine(CONNECTION_STRING)
-    query = """
-    SELECT * FROM measurements m
-    LEFT JOIN equipment_components ec ON m.installation = ec.installation 
-        AND m.equipment = ec.equipment 
-        AND m.component = ec.component
-    WHERE m.equipment LIKE '%Т-%' OR m.equipment LIKE '%T-%'
-    """
+    query = "SELECT * FROM _ml_worst_case_training_view"
     df = pd.read_sql(query, engine)
     return df
