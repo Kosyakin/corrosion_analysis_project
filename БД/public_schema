@@ -1,0 +1,453 @@
+Измерения толщины
+(точки ММС, даты, метод)
+CREATE TABLE public.measurements (
+	id serial4 NOT NULL,
+	component_id int4 NOT NULL,
+	mms varchar(50) NULL,
+	measurement numeric(5, 1) NULL,
+	contour varchar(50) NULL,
+	measurement_date date NULL,
+	quality_indicator_id int4 NULL,
+	measurement_method_id int4 NULL,
+	nominal_thickness_mmc numeric(5, 1) NULL,
+	tmin_mmc numeric(5, 1) NULL,
+	CONSTRAINT new_measurements_pkey PRIMARY KEY (id),
+	CONSTRAINT new_measurements_component_id_fkey FOREIGN KEY (component_id) REFERENCES public.components(id) ON DELETE CASCADE,
+	CONSTRAINT new_measurements_measurement_method_id_fkey FOREIGN KEY (measurement_method_id) REFERENCES public.measurement_methods(id) ON DELETE SET NULL,
+	CONSTRAINT new_measurements_quality_indicator_id_fkey FOREIGN KEY (quality_indicator_id) REFERENCES public.quality_indicators(id) ON DELETE SET NULL
+);
+CREATE INDEX idx_new_measurements_component_date ON public.measurements USING btree (component_id, measurement_date);
+Методы измерений
+(справочник)
+CREATE TABLE public.measurement_methods (
+	id serial4 NOT NULL,
+	code varchar(10) NOT NULL,
+	CONSTRAINT new_measurement_methods_code_key UNIQUE (code),
+	CONSTRAINT new_measurement_methods_pkey PRIMARY KEY (id)
+);
+Качество измерений
+(справочник)
+CREATE TABLE public.quality_indicators (
+	id serial4 NOT NULL,
+	code varchar(10) NOT NULL,
+	CONSTRAINT new_quality_indicators_code_key UNIQUE (code),
+	CONSTRAINT new_quality_indicators_pkey PRIMARY KEY (id)
+);
+Установки
+(площадки/цеха)
+CREATE TABLE public.installations (
+	id serial4 NOT NULL,
+	"name" varchar(50) NOT NULL,
+	factory varchar(255) NULL,
+	CONSTRAINT new_installations_name_key UNIQUE (name),
+	CONSTRAINT new_installations_pkey PRIMARY KEY (id)
+);
+Оборудование
+CREATE TABLE public.equipment (
+	id serial4 NOT NULL,
+	installation_id int4 NOT NULL,
+	"name" varchar(100) NOT NULL,
+	equipment_type_tm varchar(50) NULL,
+	start_date_of_operation date NULL,
+	CONSTRAINT new_equipment_installation_id_name_key UNIQUE (installation_id, name),
+	CONSTRAINT new_equipment_pkey PRIMARY KEY (id),
+	CONSTRAINT new_equipment_installation_id_fkey FOREIGN KEY (installation_id) REFERENCES public.installations(id) ON DELETE RESTRICT
+);
+CREATE INDEX idx_new_equipment_installation_name ON public.equipment USING btree (installation_id, name);
+
+Химсреда по контурам
+(вещество, мол.%)
+CREATE TABLE public.equipment_chemical_environment (
+	id serial4 NOT NULL,
+	equipment_id int4 NOT NULL,
+	contour varchar(50) NULL,
+	environment varchar(200) NULL,
+	substance_id int4 NULL,
+	chem_type varchar(50) NULL,
+	mol_percent numeric(10, 6) NULL,
+	CONSTRAINT new_equipment_chemical_environment_mol_percent_check CHECK (((mol_percent IS NULL) OR ((mol_percent >= (0)::numeric) AND (mol_percent <= (100)::numeric)))),
+	CONSTRAINT new_equipment_chemical_environment_pkey PRIMARY KEY (id),
+	CONSTRAINT new_equipment_chemical_environment_equipment_id_fkey FOREIGN KEY (equipment_id) REFERENCES public.equipment(id) ON DELETE CASCADE,
+	CONSTRAINT new_equipment_chemical_environment_substance_id_fkey FOREIGN KEY (substance_id) REFERENCES public.substances(id) ON DELETE SET NULL
+);
+CREATE INDEX idx_new_ece_equipment ON public.equipment_chemical_environment USING btree (equipment_id);
+
+
+Компоненты оборудования
+(геометрия, материал)
+Обогощение категорированием
+
+CREATE TABLE public.components (
+	id serial4 NOT NULL,
+	equipment_id int4 NOT NULL,
+	"name" varchar(100) NOT NULL,
+	source_component varchar(100) NULL,
+	material_code_id int4 NULL,
+	component_type varchar(50) NULL,
+	operating_temperature numeric(6, 1) NULL,
+	operating_pressure numeric(8, 3) NULL,
+	outer_diameter numeric(8, 1) NULL,
+	inner_diameter numeric(8, 1) NULL,
+	initial_thickness numeric(6, 1) NULL,
+	tank_volume numeric(10, 1) NULL,
+	component_type_code int2 GENERATED ALWAYS AS (
+CASE
+    WHEN lower(COALESCE(component_type, ''::character varying)::text) ~~ '%участок%'::text THEN 1
+    WHEN lower(COALESCE(component_type, ''::character varying)::text) ~~ '%отвод%'::text OR lower(COALESCE(name, ''::character varying)::text) ~~ 'отвод%'::text THEN 2
+    WHEN lower(COALESCE(component_type, ''::character varying)::text) ~~ '%тройник%'::text THEN 3
+    WHEN lower(COALESCE(component_type, ''::character varying)::text) ~~ '%переход%'::text OR lower(COALESCE(component_type, ''::character varying)::text) ~~ '%редукт%'::text THEN 4
+    WHEN lower(COALESCE(component_type, ''::character varying)::text) ~~ '%заглуш%'::text THEN 5
+    WHEN lower(COALESCE(component_type, ''::character varying)::text) ~~ '%фланец%'::text THEN 6
+    WHEN lower(COALESCE(component_type, ''::character varying)::text) ~~ '%задвиж%'::text OR lower(COALESCE(component_type, ''::character varying)::text) ~~ '%клапан%'::text OR lower(COALESCE(component_type, ''::character varying)::text) ~~ '%вентиль%'::text THEN 7
+    ELSE 0
+END) STORED NULL,
+	cross_section_area_mm2 numeric(18, 4) GENERATED ALWAYS AS (
+CASE
+    WHEN outer_diameter IS NOT NULL THEN pi()::numeric * (outer_diameter * outer_diameter - COALESCE(inner_diameter,
+    CASE
+        WHEN initial_thickness IS NOT NULL THEN GREATEST(outer_diameter - 2::numeric * initial_thickness, 0::numeric)
+        ELSE NULL::numeric
+    END) * COALESCE(inner_diameter,
+    CASE
+        WHEN initial_thickness IS NOT NULL THEN GREATEST(outer_diameter - 2::numeric * initial_thickness, 0::numeric)
+        ELSE NULL::numeric
+    END)) / 4::numeric
+    ELSE NULL::numeric
+END) STORED NULL,
+	CONSTRAINT new_components_check CHECK (((inner_diameter IS NULL) OR (outer_diameter IS NULL) OR (inner_diameter <= outer_diameter))),
+	CONSTRAINT new_components_equipment_id_name_key UNIQUE (equipment_id, name),
+	CONSTRAINT new_components_pkey PRIMARY KEY (id),
+	CONSTRAINT new_components_equipment_id_fkey FOREIGN KEY (equipment_id) REFERENCES public.equipment(id) ON DELETE CASCADE,
+	CONSTRAINT new_components_material_code_id_fkey FOREIGN KEY (material_code_id) REFERENCES public.material_codes(id) ON DELETE SET NULL
+);
+CREATE INDEX idx_new_components_equipment_name ON public.components USING btree (equipment_id, name);
+CREATE INDEX ix_new_components_cross_section_area ON public.components USING btree (cross_section_area_mm2);
+CREATE INDEX ix_new_components_type_code ON public.components USING btree (component_type_code);
+
+Материалы
+(код, марка, тип
+ расчет корроз. стойкости
+ CREATE TABLE public.material_codes (
+	id serial4 NOT NULL,
+	material_code varchar(20) NOT NULL,
+	material_grade varchar(50) NOT NULL,
+	material_type varchar(100) NOT NULL,
+	material_resistance_score int2 GENERATED ALWAYS AS (
+CASE
+    WHEN lower(regexp_replace((COALESCE(material_type, ''::character varying)::text || ' '::text) || COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~~ '%монел%'::text OR lower(regexp_replace((COALESCE(material_type, ''::character varying)::text || ' '::text) || COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~~ '%cu-ni%'::text OR lower(regexp_replace((COALESCE(material_type, ''::character varying)::text || ' '::text) || COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~~ '%cu ni%'::text OR lower(regexp_replace((COALESCE(material_type, ''::character varying)::text || ' '::text) || COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~~ '%nickel%'::text THEN 9
+    WHEN (lower(regexp_replace((COALESCE(material_type, ''::character varying)::text || ' '::text) || COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~~ '%аустенит%'::text OR lower(regexp_replace((COALESCE(material_type, ''::character varying)::text || ' '::text) || COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~~ '%austenit%'::text) AND (lower(regexp_replace(COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~ '(^|[^0-9])316(l)?([^0-9]|$)'::text OR lower(regexp_replace(COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~ '(^|[^0-9])317(l)?([^0-9]|$)'::text OR lower(regexp_replace((COALESCE(material_type, ''::character varying)::text || ' '::text) || COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~ '>\s*2\.?25% *mo'::text) THEN 10
+    WHEN lower(regexp_replace((COALESCE(material_type, ''::character varying)::text || ' '::text) || COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~~ '%аустенит%'::text OR lower(regexp_replace((COALESCE(material_type, ''::character varying)::text || ' '::text) || COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~~ '%austenit%'::text THEN 8
+    WHEN lower(regexp_replace((COALESCE(material_type, ''::character varying)::text || ' '::text) || COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~~ '%феррит%нержав%'::text THEN 7
+    WHEN lower(regexp_replace((COALESCE(material_type, ''::character varying)::text || ' '::text) || COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~~ '%cr 9%'::text OR lower(regexp_replace((COALESCE(material_type, ''::character varying)::text || ' '::text) || COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~~ '%cr9%'::text OR lower(regexp_replace((COALESCE(material_type, ''::character varying)::text || ' '::text) || COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~~ '%х9%'::text OR lower(regexp_replace((COALESCE(material_type, ''::character varying)::text || ' '::text) || COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~~ '%cr 5%'::text OR lower(regexp_replace((COALESCE(material_type, ''::character varying)::text || ' '::text) || COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~~ '%cr5%'::text OR lower(regexp_replace((COALESCE(material_type, ''::character varying)::text || ' '::text) || COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~~ '%х5%'::text THEN 6
+    WHEN lower(regexp_replace((COALESCE(material_type, ''::character varying)::text || ' '::text) || COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~~ '%2.25 cr 1 mo%'::text OR lower(regexp_replace((COALESCE(material_type, ''::character varying)::text || ' '::text) || COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~~ '%2,25 cr 1 mo%'::text OR lower(regexp_replace((COALESCE(material_type, ''::character varying)::text || ' '::text) || COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~~ '%2.25cr 1mo%'::text THEN 5
+    WHEN lower(regexp_replace((COALESCE(material_type, ''::character varying)::text || ' '::text) || COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~~ '%1.25 cr 0.5 mo%'::text OR lower(regexp_replace((COALESCE(material_type, ''::character varying)::text || ' '::text) || COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~~ '%1,25 cr 0.5 mo%'::text OR lower(regexp_replace((COALESCE(material_type, ''::character varying)::text || ' '::text) || COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~~ '%1.25cr 0.5mo%'::text THEN 4
+    WHEN lower(regexp_replace(COALESCE(material_type, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~~ '%низколегированн%'::text THEN 4
+    WHEN lower(regexp_replace((COALESCE(material_type, ''::character varying)::text || ' '::text) || COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~~ '%углеродистая%'::text OR lower(regexp_replace((COALESCE(material_type, ''::character varying)::text || ' '::text) || COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~~ '%углер.%'::text OR lower(regexp_replace(COALESCE(material_grade, ''::character varying)::text, '\s+'::text, ' '::text, 'g'::text)) ~~ '%st3%'::text THEN 2
+    ELSE 1
+END) STORED NULL,
+	CONSTRAINT new_material_codes_material_code_key UNIQUE (material_code),
+	CONSTRAINT new_material_codes_pkey PRIMARY KEY (id)
+);
+CREATE INDEX ix_new_material_codes_resistance_score ON public.material_codes USING btree (material_resistance_score);
+
+Вещества среды
+(канонические названия)
+CREATE TABLE public.substances (
+	id serial4 NOT NULL,
+	"name" varchar(100) NOT NULL,
+	CONSTRAINT new_substances_name_key UNIQUE (name),
+	CONSTRAINT new_substances_pkey PRIMARY KEY (id)
+);
+
+Химический состав и индексы:
+— pivot по веществам
+— агрегирование по оборудованию и контуру
+-- public.mv_environment_features исходный текст
+
+CREATE MATERIALIZED VIEW public.mv_environment_features
+TABLESPACE pg_default
+AS WITH canon AS (
+         SELECT ne.installation_id,
+            ne.id AS equipment_id,
+            ece.contour,
+            lower(TRIM(BOTH FROM ns.name)) AS substance,
+            ece.mol_percent
+           FROM equipment_chemical_environment ece
+             JOIN equipment ne ON ne.id = ece.equipment_id
+             LEFT JOIN substances ns ON ns.id = ece.substance_id
+        )
+ SELECT installation_id,
+    equipment_id,
+    contour,
+    max(
+        CASE
+            WHEN substance = 'вода'::text THEN mol_percent
+            ELSE NULL::numeric
+        END) AS water_content,
+    max(
+        CASE
+            WHEN substance = 'сероводород'::text THEN mol_percent
+            ELSE NULL::numeric
+        END) AS h2s_content,
+    max(
+        CASE
+            WHEN substance = 'хлор'::text THEN mol_percent
+            ELSE NULL::numeric
+        END) AS chlorine_content,
+    max(
+        CASE
+            WHEN substance = 'диоксид углерода'::text THEN mol_percent
+            ELSE NULL::numeric
+        END) AS co2_content,
+    max(
+        CASE
+            WHEN substance = 'кислород'::text THEN mol_percent
+            ELSE NULL::numeric
+        END) AS oxygen_content,
+    max(
+        CASE
+            WHEN substance = 'соляная кислота'::text THEN mol_percent
+            ELSE NULL::numeric
+        END) AS hydrochloric_acid_content,
+    max(
+        CASE
+            WHEN substance = ANY (ARRAY['аммиак (nh3)'::text, 'аммиак'::text]) THEN mol_percent
+            ELSE NULL::numeric
+        END) AS ammonia_content,
+    max(
+        CASE
+            WHEN substance = 'ammonium chloride'::text THEN mol_percent
+            ELSE NULL::numeric
+        END) AS ammonium_chloride_content,
+    max(
+        CASE
+            WHEN substance = 'ингибитор коррозии'::text THEN mol_percent
+            ELSE NULL::numeric
+        END) AS corrosion_inhibitor_content,
+    max(
+        CASE
+            WHEN substance ~~ 'едкий натр%'::text THEN mol_percent
+            ELSE NULL::numeric
+        END) AS sodium_hydroxide_content,
+        CASE
+            WHEN COALESCE(max(
+            CASE
+                WHEN substance = 'вода'::text THEN mol_percent
+                ELSE NULL::numeric
+            END), 0::numeric) > 0.001 THEN max(
+            CASE
+                WHEN substance = 'сероводород'::text THEN mol_percent
+                ELSE NULL::numeric
+            END) / max(
+            CASE
+                WHEN substance = 'вода'::text THEN mol_percent
+                ELSE NULL::numeric
+            END)
+            ELSE 0::numeric
+        END AS h2s_water_ratio,
+    COALESCE(max(
+        CASE
+            WHEN substance = 'сероводород'::text THEN mol_percent
+            ELSE NULL::numeric
+        END), 0::numeric) * COALESCE(max(
+        CASE
+            WHEN substance = 'вода'::text THEN mol_percent
+            ELSE NULL::numeric
+        END), 0::numeric) * 1000::numeric AS h2s_aggressiveness_index,
+    COALESCE(max(
+        CASE
+            WHEN substance = 'соляная кислота'::text THEN mol_percent
+            ELSE NULL::numeric
+        END), 0::numeric) * 8::numeric + COALESCE(max(
+        CASE
+            WHEN substance = 'диоксид углерода'::text THEN mol_percent
+            ELSE NULL::numeric
+        END), 0::numeric) * 3::numeric + COALESCE(max(
+        CASE
+            WHEN substance = ANY (ARRAY['уксусная кислота'::text, 'нафтеновая кислота'::text]) THEN mol_percent
+            ELSE NULL::numeric
+        END), 0::numeric) * 5::numeric AS total_acidity_index,
+    COALESCE(max(
+        CASE
+            WHEN substance = 'хлор'::text THEN mol_percent
+            ELSE NULL::numeric
+        END), 0::numeric) * 10::numeric + COALESCE(max(
+        CASE
+            WHEN substance = 'соляная кислота'::text THEN mol_percent
+            ELSE NULL::numeric
+        END), 0::numeric) * 12::numeric AS chloride_aggressiveness,
+    COALESCE(max(
+        CASE
+            WHEN substance = 'хлор'::text THEN mol_percent
+            ELSE NULL::numeric
+        END), 0::numeric) * COALESCE(max(
+        CASE
+            WHEN substance = 'вода'::text THEN mol_percent
+            ELSE NULL::numeric
+        END), 0::numeric) * 100::numeric AS pitting_corrosion_index,
+    COALESCE(max(
+        CASE
+            WHEN substance = ANY (ARRAY['сероводород'::text, 'сера'::text]) THEN mol_percent
+            ELSE NULL::numeric
+        END), 0::numeric) * COALESCE(max(
+        CASE
+            WHEN substance = 'вода'::text THEN mol_percent
+            ELSE NULL::numeric
+        END), 0::numeric) * 500::numeric + COALESCE(max(
+        CASE
+            WHEN substance = ANY (ARRAY['ammonium chloride'::text, 'хлор'::text]) THEN mol_percent
+            ELSE NULL::numeric
+        END), 0::numeric) * 8::numeric AS underdeposit_corrosion_index,
+    COALESCE(max(
+        CASE
+            WHEN substance = 'сероводород'::text THEN mol_percent
+            ELSE NULL::numeric
+        END), 0::numeric) * 15::numeric + COALESCE(max(
+        CASE
+            WHEN substance = 'хлор'::text THEN mol_percent
+            ELSE NULL::numeric
+        END), 0::numeric) * 12::numeric AS stress_corrosion_index,
+    COALESCE(max(
+        CASE
+            WHEN substance = 'ингибитор коррозии'::text THEN mol_percent
+            ELSE NULL::numeric
+        END), 0::numeric) * 20::numeric + COALESCE(max(
+        CASE
+            WHEN substance = ANY (ARRAY['аммиак (nh3)'::text, 'аммиак'::text]) THEN mol_percent
+            ELSE NULL::numeric
+        END), 0::numeric) * 3::numeric + COALESCE(max(
+        CASE
+            WHEN substance ~~ 'едкий натр%'::text THEN mol_percent
+            ELSE NULL::numeric
+        END), 0::numeric) * 5::numeric AS corrosion_protection_index,
+    count(*) AS total_components,
+    sum(mol_percent) AS total_composition,
+    COALESCE(max(
+        CASE
+            WHEN substance = ANY (ARRAY['сероводород'::text, 'сера'::text, 'серная кислота'::text, 'этилмеркаптан'::text]) THEN mol_percent
+            ELSE NULL::numeric
+        END), 0::numeric) AS total_sulfur_compounds,
+    COALESCE(max(
+        CASE
+            WHEN substance = ANY (ARRAY['соляная кислота'::text, 'хлор'::text]) THEN mol_percent
+            ELSE NULL::numeric
+        END), 0::numeric) AS total_chlorine_compounds,
+    COALESCE(max(
+        CASE
+            WHEN substance = ANY (ARRAY['уксусная кислота'::text, 'нафтеновая кислота'::text, 'диоксид углерода'::text]) THEN mol_percent
+            ELSE NULL::numeric
+        END), 0::numeric) AS total_acids,
+    COALESCE(max(
+        CASE
+            WHEN substance = 'сероводород'::text THEN mol_percent * 10::numeric
+            ELSE NULL::numeric
+        END), 0::numeric) + COALESCE(max(
+        CASE
+            WHEN substance = 'хлор'::text THEN mol_percent * 5::numeric
+            ELSE NULL::numeric
+        END), 0::numeric) + COALESCE(max(
+        CASE
+            WHEN substance = 'соляная кислота'::text THEN mol_percent * 8::numeric
+            ELSE NULL::numeric
+        END), 0::numeric) AS corrosion_aggressiveness_index
+   FROM canon
+  GROUP BY installation_id, equipment_id, contour
+WITH DATA;
+
+-- View indexes:
+CREATE INDEX ix_mv_environment_features_install ON public.mv_environment_features USING btree (installation_id, equipment_id, contour);
+CREATE UNIQUE INDEX ux_mv_environment_features ON public.mv_environment_features USING btree (equipment_id, contour);
+
+
+
+Основной список замеров:
+— Оконные ф-ии для расчета пар-ов
+— Δt и мгновенная V_коррозии.
+
+CREATE MATERIALIZED VIEW public.mv_pipeline_corrosion_base
+TABLESPACE pg_default
+AS WITH base AS (
+         SELECT nm.id AS measurement_id,
+            ni.id AS installation_id,
+            ni.name AS installation,
+            ne.id AS equipment_id,
+            ne.name AS equipment,
+            nc.id AS component_id,
+            nc.name AS component,
+            nm.contour,
+            nm.mms,
+            nm.measurement_date AS curr_measurement_date,
+            nm.measurement AS curr_thickness,
+            lag(nm.measurement_date) OVER (PARTITION BY ne.id, nc.id, nm.mms ORDER BY nm.measurement_date, nm.id) AS prev_measurement_date,
+            lag(nm.measurement) OVER (PARTITION BY ne.id, nc.id, nm.mms ORDER BY nm.measurement_date, nm.id) AS prev_thickness,
+            lag(nm.measurement_date, 2) OVER (PARTITION BY ne.id, nc.id, nm.mms ORDER BY nm.measurement_date, nm.id) AS prev2_measurement_date,
+            lag(nm.measurement, 2) OVER (PARTITION BY ne.id, nc.id, nm.mms ORDER BY nm.measurement_date, nm.id) AS prev2_thickness,
+            nm.nominal_thickness_mmc,
+            nm.tmin_mmc,
+            nc.initial_thickness,
+            nc.component_type,
+            nmm.code AS measurement_method_code
+           FROM measurements nm
+             JOIN components nc ON nc.id = nm.component_id
+             JOIN equipment ne ON ne.id = nc.equipment_id
+             JOIN installations ni ON ni.id = ne.installation_id
+             LEFT JOIN measurement_methods nmm ON nmm.id = nm.measurement_method_id
+          WHERE nc.component_type::text = 'Участок трубопровода'::text
+        ), derived AS (
+         SELECT b.measurement_id,
+            b.installation_id,
+            b.installation,
+            b.equipment_id,
+            b.equipment,
+            b.component_id,
+            b.component,
+            b.contour,
+            b.mms,
+            b.curr_measurement_date,
+            b.curr_thickness,
+            b.prev_measurement_date,
+            b.prev_thickness,
+            b.prev2_measurement_date,
+            b.prev2_thickness,
+            b.nominal_thickness_mmc,
+            b.tmin_mmc,
+            b.initial_thickness,
+            b.component_type,
+            b.measurement_method_code,
+            EXTRACT(epoch FROM b.curr_measurement_date::timestamp without time zone - b.prev_measurement_date::timestamp without time zone) / 31557600.0 AS delta_years
+           FROM base b
+        )
+ SELECT measurement_id,
+    installation_id,
+    installation,
+    equipment_id,
+    equipment,
+    component_id,
+    component,
+    contour,
+    mms,
+    curr_measurement_date,
+    curr_thickness,
+    prev_measurement_date,
+    prev_thickness,
+    prev2_measurement_date,
+    prev2_thickness,
+    nominal_thickness_mmc,
+    tmin_mmc,
+    initial_thickness,
+    component_type,
+    measurement_method_code,
+    delta_years,
+        CASE
+            WHEN prev_measurement_date IS NULL OR delta_years IS NULL OR delta_years <= 0::numeric THEN NULL::numeric
+            ELSE (prev_thickness - curr_thickness) / delta_years
+        END AS corr_rate_mm_per_year
+   FROM derived d
+  WHERE prev_measurement_date IS NOT NULL AND delta_years > 0::numeric
+WITH DATA;
+
+-- View indexes:
+CREATE INDEX ix_mv_pipeline_corrosion_base_contour ON public.mv_pipeline_corrosion_base USING btree (equipment_id, contour, mms, curr_measurement_date);
+CREATE INDEX ix_mv_pipeline_corrosion_base_ids ON public.mv_pipeline_corrosion_base USING btree (installation_id, equipment_id, component_id, mms, curr_measurement_date);
+CREATE INDEX ix_mv_pipeline_corrosion_base_lookup ON public.mv_pipeline_corrosion_base USING btree (installation, equipment, component, mms, curr_measurement_date);
+CREATE UNIQUE INDEX ux_mv_pipeline_corrosion_base_measurement_id ON public.mv_pipeline_corrosion_base USING btree (measurement_id);
