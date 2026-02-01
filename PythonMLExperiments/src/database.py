@@ -36,3 +36,10 @@ def load_corrosion_data():
     query = "SELECT * FROM _ml_worst_case_training_view"
     df = pd.read_sql(query, engine)
     return df
+
+def load_worst_corrosion_by_component():
+    """Загрузка данных из представления"""
+    engine = create_engine(CONNECTION_STRING)
+    query = "SELECT * FROM _ml_worst_case_by_component_view"
+    df = pd.read_sql(query, engine)
+    return df  

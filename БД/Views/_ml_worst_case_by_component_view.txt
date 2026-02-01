@@ -1,0 +1,134 @@
+-- Агрегация по компонентам: наихудшее по каждому компоненту на дату
+-- Одна строка на (equipment_id, component_id, curr_measurement_date)
+-- corr_rate_worst_mm_per_year = MAX(corr_rate) среди всех сечений компонента
+-- + статистика: num_sections, min/max/avg по сечениям
+
+DROP MATERIALIZED VIEW IF EXISTS public._ml_worst_case_by_component_view CASCADE;
+
+CREATE MATERIALIZED VIEW public._ml_worst_case_by_component_view
+TABLESPACE pg_default
+AS
+WITH component_stats AS (
+    SELECT
+        equipment_id,
+        component_id,
+        curr_measurement_date,
+        COUNT(*) AS num_sections,
+        MIN(corr_rate_section_mm_per_year) AS min_corr_rate_mm_per_year,
+        MAX(corr_rate_section_mm_per_year) AS max_corr_rate_mm_per_year,
+        AVG(corr_rate_section_mm_per_year) AS avg_corr_rate_mm_per_year
+    FROM public._ml_worst_case_training_view
+    GROUP BY equipment_id, component_id, curr_measurement_date
+),
+worst_section AS (
+    SELECT
+        v.*,
+        ROW_NUMBER() OVER (
+            PARTITION BY v.equipment_id, v.component_id, v.curr_measurement_date
+            ORDER BY v.corr_rate_section_mm_per_year DESC NULLS LAST, v.mms_section
+        ) AS rn
+    FROM public._ml_worst_case_training_view v
+)
+SELECT
+    -- Ключи
+    w.installation_id,
+    w.installation,
+    w.equipment_id,
+    w.equipment,
+    w.component_id,
+    w.component,
+    w.contour,
+    w.mms_section AS worst_mms_section,
+    w.curr_measurement_date,
+    w.prev_measurement_date,
+
+    -- Целевая переменная: наихудшая скорость по компоненту
+    w.corr_rate_section_mm_per_year AS corr_rate_worst_mm_per_year,
+
+    -- Статистика по сечениям компонента
+    cs.num_sections,
+    cs.min_corr_rate_mm_per_year,
+    cs.max_corr_rate_mm_per_year,
+    cs.avg_corr_rate_mm_per_year,
+
+    -- Толщины (из наихудшего сечения)
+    w.prev_thickness_worst_mm,
+    w.curr_thickness_worst_mm,
+    w.prev_thickness_avg_mm,
+    w.curr_thickness_avg_mm,
+    w.num_points_in_section,
+
+    -- Технические параметры
+    w.nominal_thickness_mmc,
+    w.nominal_eff,
+    w.tmin_mmc,
+    w.tmin_eff,
+    w.initial_thickness,
+    w.component_type,
+    w.delta_years,
+    w.equipment_age_years,
+    w.effective_start_date,
+
+    -- Геометрия компонента
+    w.component_type_code,
+    w.outer_diameter,
+    w.inner_diameter,
+    w.cross_section_area_mm2,
+    w.material_code_id,
+
+    -- Материал
+    w.material_code,
+    w.material_grade,
+    w.material_type,
+    w.material_resistance_score,
+
+    -- Химическая среда
+    w.water_content,
+    w.h2s_content,
+    w.chlorine_content,
+    w.co2_content,
+    w.oxygen_content,
+    w.hydrochloric_acid_content,
+    w.ammonia_content,
+    w.ammonium_chloride_content,
+    w.corrosion_inhibitor_content,
+    w.sodium_hydroxide_content,
+    w.h2s_water_ratio,
+    w.h2s_aggressiveness_index,
+    w.total_acidity_index,
+    w.chloride_aggressiveness,
+    w.pitting_corrosion_index,
+    w.underdeposit_corrosion_index,
+    w.stress_corrosion_index,
+    w.corrosion_protection_index,
+    w.total_components,
+    w.total_composition,
+    w.total_sulfur_compounds,
+    w.total_chlorine_compounds,
+    w.total_acids,
+    w.corrosion_aggressiveness_index
+
+FROM worst_section w
+JOIN component_stats cs
+    ON cs.equipment_id = w.equipment_id
+   AND cs.component_id = w.component_id
+   AND cs.curr_measurement_date = w.curr_measurement_date
+WHERE w.rn = 1
+WITH DATA;
+
+-- Индексы
+CREATE UNIQUE INDEX ux__ml_worst_case_by_component_key
+    ON public._ml_worst_case_by_component_view (equipment_id, component_id, curr_measurement_date);
+
+CREATE INDEX ix__ml_worst_case_by_component_ids_date
+    ON public._ml_worst_case_by_component_view (installation_id, equipment_id, curr_measurement_date);
+
+CREATE INDEX ix__ml_worst_case_by_component_type_material
+    ON public._ml_worst_case_by_component_view (component_type_code, material_resistance_score);
+
+CREATE INDEX ix__ml_worst_case_by_component_corr_rate
+    ON public._ml_worst_case_by_component_view (corr_rate_worst_mm_per_year)
+    WHERE corr_rate_worst_mm_per_year > 0;
+
+-- Пример обновления:
+-- REFRESH MATERIALIZED VIEW CONCURRENTLY public._ml_worst_case_by_component_view;

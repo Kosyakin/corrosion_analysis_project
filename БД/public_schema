@@ -451,3 +451,347 @@ CREATE INDEX ix_mv_pipeline_corrosion_base_contour ON public.mv_pipeline_corrosi
 CREATE INDEX ix_mv_pipeline_corrosion_base_ids ON public.mv_pipeline_corrosion_base USING btree (installation_id, equipment_id, component_id, mms, curr_measurement_date);
 CREATE INDEX ix_mv_pipeline_corrosion_base_lookup ON public.mv_pipeline_corrosion_base USING btree (installation, equipment, component, mms, curr_measurement_date);
 CREATE UNIQUE INDEX ux_mv_pipeline_corrosion_base_measurement_id ON public.mv_pipeline_corrosion_base USING btree (measurement_id);
+
+
+
+-- public."_mv_pipeline_corrosion_base" исходный текст
+
+CREATE MATERIALIZED VIEW public."_mv_pipeline_corrosion_base"
+TABLESPACE pg_default
+AS WITH base AS (
+         SELECT nm.id AS measurement_id,
+            ni.id AS installation_id,
+            ni.name AS installation,
+            ne.id AS equipment_id,
+            ne.name AS equipment,
+            ne.start_date_of_operation,
+            nc.id AS component_id,
+            nc.name AS component,
+            nm.contour,
+            nm.mms,
+            nm.measurement_date AS curr_measurement_date,
+            nm.measurement AS curr_thickness,
+            lag(nm.measurement_date) OVER w AS prev_measurement_date,
+            lag(nm.measurement) OVER w AS prev_thickness,
+            lag(nm.measurement_date, 2) OVER w AS prev2_measurement_date,
+            lag(nm.measurement, 2) OVER w AS prev2_thickness,
+            nm.nominal_thickness_mmc,
+            nm.tmin_mmc,
+            nc.initial_thickness,
+            nc.component_type,
+            nmm.code AS measurement_method_code
+           FROM measurements nm
+             JOIN components nc ON nc.id = nm.component_id
+             JOIN equipment ne ON ne.id = nc.equipment_id
+             JOIN installations ni ON ni.id = ne.installation_id
+             LEFT JOIN measurement_methods nmm ON nmm.id = nm.measurement_method_id
+          WHERE nc.component_type::text = 'Участок трубопровода'::text
+          WINDOW w AS (PARTITION BY ne.id, nc.id, nm.mms ORDER BY nm.measurement_date, nm.id)
+        ), derived AS (
+         SELECT b.measurement_id,
+            b.installation_id,
+            b.installation,
+            b.equipment_id,
+            b.equipment,
+            b.start_date_of_operation,
+            b.component_id,
+            b.component,
+            b.contour,
+            b.mms,
+            b.curr_measurement_date,
+            b.curr_thickness,
+            b.prev_measurement_date,
+            b.prev_thickness,
+            b.prev2_measurement_date,
+            b.prev2_thickness,
+            b.nominal_thickness_mmc,
+            b.tmin_mmc,
+            b.initial_thickness,
+            b.component_type,
+            b.measurement_method_code,
+            COALESCE(b.nominal_thickness_mmc, b.initial_thickness) AS nominal_eff,
+            b.tmin_mmc AS tmin_eff,
+            EXTRACT(epoch FROM b.curr_measurement_date::timestamp without time zone - b.prev_measurement_date::timestamp without time zone) / 31557600.0 AS delta_years,
+            EXTRACT(epoch FROM b.prev_measurement_date::timestamp without time zone - b.prev2_measurement_date::timestamp without time zone) / 31557600.0 AS delta_years_prev
+           FROM base b
+        ), rates AS (
+         SELECT d.measurement_id,
+            d.installation_id,
+            d.installation,
+            d.equipment_id,
+            d.equipment,
+            d.start_date_of_operation,
+            d.component_id,
+            d.component,
+            d.contour,
+            d.mms,
+            d.curr_measurement_date,
+            d.curr_thickness,
+            d.prev_measurement_date,
+            d.prev_thickness,
+            d.prev2_measurement_date,
+            d.prev2_thickness,
+            d.nominal_thickness_mmc,
+            d.tmin_mmc,
+            d.initial_thickness,
+            d.component_type,
+            d.measurement_method_code,
+            d.nominal_eff,
+            d.tmin_eff,
+            d.delta_years,
+            d.delta_years_prev,
+                CASE
+                    WHEN d.prev_measurement_date IS NULL OR d.delta_years IS NULL OR d.delta_years <= 0::numeric THEN NULL::numeric
+                    ELSE (d.prev_thickness - d.curr_thickness) / d.delta_years
+                END AS corr_rate_mm_per_year,
+                CASE
+                    WHEN d.prev2_measurement_date IS NULL OR d.delta_years_prev IS NULL OR d.delta_years_prev <= 0::numeric THEN NULL::numeric
+                    ELSE (d.prev2_thickness - d.prev_thickness) / d.delta_years_prev
+                END AS prev_corr_rate_mm_per_year
+           FROM derived d
+        ), flagged AS (
+         SELECT r.measurement_id,
+            r.installation_id,
+            r.installation,
+            r.equipment_id,
+            r.equipment,
+            r.start_date_of_operation,
+            r.component_id,
+            r.component,
+            r.contour,
+            r.mms,
+            r.curr_measurement_date,
+            r.curr_thickness,
+            r.prev_measurement_date,
+            r.prev_thickness,
+            r.prev2_measurement_date,
+            r.prev2_thickness,
+            r.nominal_thickness_mmc,
+            r.tmin_mmc,
+            r.initial_thickness,
+            r.component_type,
+            r.measurement_method_code,
+            r.nominal_eff,
+            r.tmin_eff,
+            r.delta_years,
+            r.delta_years_prev,
+            r.corr_rate_mm_per_year,
+            r.prev_corr_rate_mm_per_year,
+                CASE
+                    WHEN r.nominal_eff IS NOT NULL AND r.tmin_eff IS NOT NULL AND r.prev_thickness IS NOT NULL AND r.curr_thickness >= (0.95 * r.nominal_eff) AND abs(r.prev_thickness - r.curr_thickness) > ((r.nominal_eff - r.tmin_eff) / 2.0) AND COALESCE(r.prev_corr_rate_mm_per_year, 0::numeric) > 0::numeric THEN true
+                    ELSE false
+                END AS is_replacement
+           FROM rates r
+        ), with_effective_date AS (
+         SELECT f.measurement_id,
+            f.installation_id,
+            f.installation,
+            f.equipment_id,
+            f.equipment,
+            f.start_date_of_operation,
+            f.component_id,
+            f.component,
+            f.contour,
+            f.mms,
+            f.curr_measurement_date,
+            f.curr_thickness,
+            f.prev_measurement_date,
+            f.prev_thickness,
+            f.prev2_measurement_date,
+            f.prev2_thickness,
+            f.nominal_thickness_mmc,
+            f.tmin_mmc,
+            f.initial_thickness,
+            f.component_type,
+            f.measurement_method_code,
+            f.nominal_eff,
+            f.tmin_eff,
+            f.delta_years,
+            f.delta_years_prev,
+            f.corr_rate_mm_per_year,
+            f.prev_corr_rate_mm_per_year,
+            f.is_replacement,
+            COALESCE(max(
+                CASE
+                    WHEN f.is_replacement THEN f.curr_measurement_date
+                    ELSE NULL::date
+                END) OVER (PARTITION BY f.equipment_id, f.component_id, f.mms ORDER BY f.curr_measurement_date ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), f.start_date_of_operation) AS effective_start_date
+           FROM flagged f
+        )
+ SELECT measurement_id,
+    installation_id,
+    installation,
+    equipment_id,
+    equipment,
+    start_date_of_operation,
+    component_id,
+    component,
+    contour,
+    mms,
+    curr_measurement_date,
+    curr_thickness,
+    prev_measurement_date,
+    prev_thickness,
+    prev2_measurement_date,
+    prev2_thickness,
+    nominal_thickness_mmc,
+    nominal_eff,
+    tmin_mmc,
+    tmin_eff,
+    initial_thickness,
+    component_type,
+    measurement_method_code,
+    delta_years,
+    delta_years_prev,
+    corr_rate_mm_per_year,
+    prev_corr_rate_mm_per_year,
+    is_replacement,
+    effective_start_date,
+        CASE
+            WHEN effective_start_date IS NOT NULL THEN EXTRACT(epoch FROM curr_measurement_date::timestamp without time zone - effective_start_date::timestamp without time zone) / 31557600.0
+            ELSE NULL::numeric
+        END AS equipment_age_years
+   FROM with_effective_date
+  WHERE prev_measurement_date IS NOT NULL AND delta_years > 0::numeric
+WITH DATA;
+
+-- View indexes:
+CREATE INDEX ix__mv_pipeline_corrosion_base_contour ON public._mv_pipeline_corrosion_base USING btree (equipment_id, contour, mms, curr_measurement_date);
+CREATE INDEX ix__mv_pipeline_corrosion_base_ids ON public._mv_pipeline_corrosion_base USING btree (installation_id, equipment_id, component_id, mms, curr_measurement_date);
+CREATE INDEX ix__mv_pipeline_corrosion_base_replacement ON public._mv_pipeline_corrosion_base USING btree (is_replacement);
+CREATE UNIQUE INDEX ux__mv_pipeline_corrosion_base_measurement_id ON public._mv_pipeline_corrosion_base USING btree (measurement_id);
+
+
+-- public."_ml_worst_case_training_view" исходный текст
+
+CREATE MATERIALIZED VIEW public."_ml_worst_case_training_view"
+TABLESPACE pg_default
+AS WITH section_aggregated AS (
+         SELECT _mv_pipeline_corrosion_base.installation_id,
+            _mv_pipeline_corrosion_base.installation,
+            _mv_pipeline_corrosion_base.equipment_id,
+            _mv_pipeline_corrosion_base.equipment,
+            _mv_pipeline_corrosion_base.start_date_of_operation,
+            _mv_pipeline_corrosion_base.component_id,
+            _mv_pipeline_corrosion_base.component,
+            _mv_pipeline_corrosion_base.contour,
+            split_part(_mv_pipeline_corrosion_base.mms::text, '.'::text, 1) AS mms_section,
+            _mv_pipeline_corrosion_base.curr_measurement_date,
+            _mv_pipeline_corrosion_base.prev_measurement_date,
+            min(_mv_pipeline_corrosion_base.prev_thickness) AS prev_thickness_worst_mm,
+            min(_mv_pipeline_corrosion_base.curr_thickness) AS curr_thickness_worst_mm,
+            avg(_mv_pipeline_corrosion_base.prev_thickness) AS prev_thickness_avg_mm,
+            avg(_mv_pipeline_corrosion_base.curr_thickness) AS curr_thickness_avg_mm,
+            count(*) AS num_points_in_section,
+            max(_mv_pipeline_corrosion_base.nominal_thickness_mmc) AS nominal_thickness_mmc,
+            max(_mv_pipeline_corrosion_base.nominal_eff) AS nominal_eff,
+            max(_mv_pipeline_corrosion_base.tmin_mmc) AS tmin_mmc,
+            max(_mv_pipeline_corrosion_base.tmin_eff) AS tmin_eff,
+            max(_mv_pipeline_corrosion_base.initial_thickness) AS initial_thickness,
+            max(_mv_pipeline_corrosion_base.component_type::text) AS component_type,
+            max(_mv_pipeline_corrosion_base.delta_years) AS delta_years,
+            max(_mv_pipeline_corrosion_base.effective_start_date) AS effective_start_date,
+            bool_or(_mv_pipeline_corrosion_base.is_replacement) AS section_has_replacement
+           FROM _mv_pipeline_corrosion_base
+          WHERE _mv_pipeline_corrosion_base.is_replacement = false AND _mv_pipeline_corrosion_base.prev_measurement_date IS NOT NULL AND _mv_pipeline_corrosion_base.delta_years > 0::numeric
+          GROUP BY _mv_pipeline_corrosion_base.installation_id, _mv_pipeline_corrosion_base.installation, _mv_pipeline_corrosion_base.equipment_id, _mv_pipeline_corrosion_base.equipment, _mv_pipeline_corrosion_base.start_date_of_operation, _mv_pipeline_corrosion_base.component_id, _mv_pipeline_corrosion_base.component, _mv_pipeline_corrosion_base.contour, (split_part(_mv_pipeline_corrosion_base.mms::text, '.'::text, 1)), _mv_pipeline_corrosion_base.curr_measurement_date, _mv_pipeline_corrosion_base.prev_measurement_date
+        ), section_with_corr_rate AS (
+         SELECT sa.installation_id,
+            sa.installation,
+            sa.equipment_id,
+            sa.equipment,
+            sa.start_date_of_operation,
+            sa.component_id,
+            sa.component,
+            sa.contour,
+            sa.mms_section,
+            sa.curr_measurement_date,
+            sa.prev_measurement_date,
+            sa.prev_thickness_worst_mm,
+            sa.curr_thickness_worst_mm,
+            sa.prev_thickness_avg_mm,
+            sa.curr_thickness_avg_mm,
+            sa.num_points_in_section,
+            sa.nominal_thickness_mmc,
+            sa.nominal_eff,
+            sa.tmin_mmc,
+            sa.tmin_eff,
+            sa.initial_thickness,
+            sa.component_type,
+            sa.delta_years,
+            sa.effective_start_date,
+            sa.section_has_replacement,
+                CASE
+                    WHEN sa.delta_years > 0::numeric AND sa.prev_thickness_worst_mm IS NOT NULL AND sa.curr_thickness_worst_mm IS NOT NULL THEN (sa.prev_thickness_worst_mm - sa.curr_thickness_worst_mm) / sa.delta_years
+                    ELSE NULL::numeric
+                END AS corr_rate_section_mm_per_year,
+                CASE
+                    WHEN sa.effective_start_date IS NOT NULL THEN EXTRACT(epoch FROM sa.curr_measurement_date::timestamp without time zone - sa.effective_start_date::timestamp without time zone) / 31557600.0
+                    ELSE NULL::numeric
+                END AS equipment_age_years
+           FROM section_aggregated sa
+        )
+ SELECT sc.installation_id,
+    sc.installation,
+    sc.equipment_id,
+    sc.equipment,
+    sc.component_id,
+    sc.component,
+    sc.contour,
+    sc.mms_section,
+    sc.curr_measurement_date,
+    sc.prev_measurement_date,
+    sc.corr_rate_section_mm_per_year,
+    sc.prev_thickness_worst_mm,
+    sc.curr_thickness_worst_mm,
+    sc.prev_thickness_avg_mm,
+    sc.curr_thickness_avg_mm,
+    sc.num_points_in_section,
+    sc.nominal_thickness_mmc,
+    sc.nominal_eff,
+    sc.tmin_mmc,
+    sc.tmin_eff,
+    sc.initial_thickness,
+    sc.component_type,
+    sc.delta_years,
+    sc.equipment_age_years,
+    sc.effective_start_date,
+    nc.component_type_code,
+    nc.outer_diameter,
+    nc.inner_diameter,
+    nc.cross_section_area_mm2,
+    nc.material_code_id,
+    nmc.material_code,
+    nmc.material_grade,
+    nmc.material_type,
+    nmc.material_resistance_score,
+    env.water_content,
+    env.h2s_content,
+    env.chlorine_content,
+    env.co2_content,
+    env.oxygen_content,
+    env.hydrochloric_acid_content,
+    env.ammonia_content,
+    env.ammonium_chloride_content,
+    env.corrosion_inhibitor_content,
+    env.sodium_hydroxide_content,
+    env.h2s_water_ratio,
+    env.h2s_aggressiveness_index,
+    env.total_acidity_index,
+    env.chloride_aggressiveness,
+    env.pitting_corrosion_index,
+    env.underdeposit_corrosion_index,
+    env.stress_corrosion_index,
+    env.corrosion_protection_index,
+    env.total_components,
+    env.total_composition,
+    env.total_sulfur_compounds,
+    env.total_chlorine_compounds,
+    env.total_acids,
+    env.corrosion_aggressiveness_index
+   FROM section_with_corr_rate sc
+     JOIN components nc ON nc.id = sc.component_id
+     LEFT JOIN material_codes nmc ON nmc.id = nc.material_code_id
+     LEFT JOIN mv_environment_features env ON env.equipment_id = sc.equipment_id AND env.contour::text = sc.contour::text
+  WHERE sc.corr_rate_section_mm_per_year IS NOT NULL AND sc.section_has_replacement = false
+WITH DATA;
