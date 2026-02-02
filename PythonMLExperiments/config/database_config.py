@@ -1,6 +1,6 @@
 # Настройки подключения к базе данных
 DATABASE_CONFIG = {
-    'host': '100.98.56.203',
+    'host': '192.168.31.73',
     'port': '5432',
     'database': 'asp_db',
     'user': 'homeuser',
