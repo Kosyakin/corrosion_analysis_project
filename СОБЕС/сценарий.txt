@@ -1,0 +1,28 @@
+Описание
+
+Собеседование длится до 90 минут.
+Вот что мы обсудим и какие задачи предложим
+
+Базы данных
+Дадим задачу по SQL и обсудим теоретические вопросы, касающиеся баз данных
+
+Code Review
+На примере простого кода попросим вас найти недостатки и предложить улучшения
+
+Асинхронность
+Решим задачу и обсудим теорию по этому важному разделу платформы
+
+Межсервисное взаимодействие
+Поговорим о межсервисном взаимодействии и его организации
+
+Теория по .NET
+Обсудим нашу платформу и стандартную библиотеку
+
+Книги
+
+Pro C# (latest) with .NET (latest), Andrew Troelsen. Подойдет начинающим
+CLR via C#, Jeffrey Richter или C# in Depth, Jon Skeet. Подойдет опытным разработчикам
+LINQ in Action, Fabrice Marguerie
+Concurrency in C# Cookbook, Stephen Cleary
+Pro .NET Memory Management: For Better Code, Performance, and Scalability, Konrad Kokosa
+Designing Data-Intensive Applications, Martin Kleppmann
