@@ -302,3 +302,322 @@ private async void OnSaveButtonClicked(object sender, EventArgs e)
 **Предлагаемые улучшения (код или список правок):**
 
 
+---
+
+## Кейс 7 — развёрнутый (50+ строк, найти от 5 типов ошибок)
+
+**Контекст:** сервис получает пользователя по email, дергает внешний API за доп. данными и пишет результат в лог-файл.
+
+**Задача:** найти **не менее 5 разных по смыслу** проблем (безопасность, ресурсы, асинхронность, null, исключения, производительность, дизайн и т.д.).
+
+```csharp
+public class UserSyncService
+{
+    private string _connectionString = "Server=.;Database=AppDb;";
+    private string _logPath = "C:\\Logs\\sync.log";
+
+    public void SyncUserByEmail(string email)
+    {
+        var connection = new SqlConnection(_connectionString);
+        connection.Open();
+
+        var query = "SELECT * FROM Users WHERE Email = '" + email + "'";
+        var cmd = new SqlCommand(query, connection);
+        var reader = cmd.ExecuteReader();
+
+        int userId = 0;
+        string userName = "";
+        if (reader.Read())
+        {
+            userId = reader.GetInt32(0);
+            userName = reader.GetString(1);
+        }
+        connection.Close();
+
+        var client = new HttpClient();
+        var url = "https://api.external.com/user/" + userId;
+        var json = client.GetStringAsync(url).Result;
+        client.Dispose();
+
+        var data = JsonSerializer.Deserialize<ExternalData>(json);
+        var line = DateTime.Now + " | " + userId + " | " + data.Status + " | " + data.Score;
+
+        try
+        {
+            var stream = File.Open(_logPath, FileMode.Append);
+            var writer = new StreamWriter(stream);
+            writer.WriteLine(line);
+            writer.Close();
+        }
+        catch (Exception)
+        {
+        }
+
+        if (data.Score > 100)
+        {
+            var updateCmd = new SqlCommand("UPDATE Users SET Flag = 1 WHERE Id = " + userId, connection);
+            connection.Open();
+            updateCmd.ExecuteNonQuery();
+        }
+    }
+}
+```
+
+---
+
+**Твой разбор — перечисли по категориям (найди от 5 направлений):**
+
+**1. Безопасность:**
+
+
+**2. Ресурсы / IDisposable:**
+
+
+**3. Асинхронность:**
+
+
+**4. Null / граничные случаи:**
+
+
+**5. Исключения:**
+
+
+**6. Прочее (производительность, дизайн, дублирование и т.д.):**
+
+
+**Кратко — что исправил бы в первую очередь (топ-3):**
+
+public async Task SyncUserByEmailAsync(string email)
+{
+    using var connection = new SqlConnection(_connectionString);
+    connection.Open();
+
+    var query = "SELECT * FROM Users WHERE Email = @email";
+
+    var cmd = new SqlCommand(query, connection);
+    cmd.Parameters.AddWithValue("@email", email);
+    using var reader = cmd.ExecuteReader(){
+    int userId = 0;
+    string userName = "";
+    if (reader.Read())
+    {
+        userId = reader.GetInt32(0);
+        userName = reader.GetString(1);
+    }
+  }
+    using var client = new HttpClient();
+    
+    var url = $"https://api.external.com/user/{userId}" ;
+    var json = await client.GetStringAsync(url);
+    var data = await JsonSerializer.DeserializeAsync<ExternalData>(json);
+    var line = $"{DateTime.Now} | {userId} | {data.Status} |  {data.Score}";
+    
+
+
+    try
+    {
+        using (var stream = File.Open(_logPath, FileMode.Append))
+        {
+            var writer = new StreamWriter(stream);
+            await writer.WriteLineAsync(line);
+        }
+    }
+    catch (Exception Ex)
+    {
+        // Добавление лога 
+    }
+
+    if (data.Score > 100)
+    {
+        var updateCmd = new SqlCommand("UPDATE Users SET Flag = 1 WHERE Id = @userId", connection);
+        updateCmd.Parameters.AddWithValue("@userId", userId);
+        await updateCmd.ExecuteNonQueryAsync();
+    }
+}
+```
+
+---
+
+## Кейс 8 — API / контроллер (другая направленность)
+
+**Контекст:** веб-API принимает запрос на создание заказа, валидирует, сохраняет и отправляет в очередь уведомлений. Нужно найти от 5 типов проблем.
+
+```csharp
+[ApiController]
+[Route("api/orders")]
+public class OrdersController : ControllerBase
+{
+    private readonly string _connStr = ConfigurationManager.ConnectionStrings["Default"].ConnectionString;
+
+    [HttpPost]
+    public IActionResult CreateOrder([FromBody] CreateOrderRequest request)
+    {
+        if (request == null)
+            return BadRequest();
+
+        if (request.Amount <= 0 || request.CustomerId == Guid.Empty)
+            return BadRequest("Invalid data");
+
+        var order = new Order();
+        order.Id = Guid.NewGuid();
+        order.CustomerId = request.CustomerId;
+        order.Amount = request.Amount;
+        order.CreatedAt = DateTime.Now;
+
+        using (var conn = new SqlConnection(_connStr))
+        {
+            conn.Open();
+            var sql = "INSERT INTO Orders (Id, CustomerId, Amount, CreatedAt) VALUES ('" +
+                order.Id + "', '" + order.CustomerId + "', " + order.Amount + ", '" + order.CreatedAt + "')";
+            var cmd = new SqlCommand(sql, conn);
+            cmd.ExecuteNonQuery();
+        }
+
+        var client = new HttpClient();
+        client.Timeout = TimeSpan.FromSeconds(3);
+        var content = new StringContent(JsonSerializer.Serialize(new { OrderId = order.Id }), Encoding.UTF8, "application/json");
+        var response = client.PostAsync("http://internal-service/notify", content).Result;
+        if (!response.IsSuccessStatusCode)
+        {
+            // откатываем заказ при ошибке уведомления
+            using (var conn = new SqlConnection(_connStr))
+            {
+                conn.Open();
+                new SqlCommand("DELETE FROM Orders WHERE Id = '" + order.Id + "'", conn).ExecuteNonQuery();
+            }
+        }
+
+        return Ok(new { order.Id });
+    }
+}
+```
+
+**Твой разбор (заполни завтра):**
+
+**1. Безопасность:**  
+**2. Ресурсы / IDisposable:**  
+**3. Асинхронность:**  
+**4. Null / граничные случаи:**  
+**5. Исключения / транзакции:**  
+**6. Прочее:**  
+**Топ-3 исправления:**
+
+---
+
+## Кейс 9 — фоновая обработка / worker
+
+**Контекст:** воркер раз в минуту забирает задачи из таблицы, обрабатывает и обновляет статус. Найти от 5 типов проблем.
+
+```csharp
+public class TaskProcessorService
+{
+    private SqlConnection _connection;
+    private bool _running = true;
+
+    public void Start()
+    {
+        _connection = new SqlConnection("Server=.;Database=Tasks;");
+        _connection.Open();
+
+        while (_running)
+        {
+            var cmd = new SqlCommand("SELECT * FROM PendingTasks WHERE Status = 0", _connection);
+            var reader = cmd.ExecuteReader();
+
+            while (reader.Read())
+            {
+                var taskId = reader.GetGuid(0);
+                var payload = reader.GetString(1);
+                reader.Close();
+
+                try
+                {
+                    ProcessTask(taskId, payload);
+                    MarkCompleted(taskId);
+                }
+                catch (Exception ex)
+                {
+                    MarkFailed(taskId, ex.Message);
+                }
+
+                reader = cmd.ExecuteReader();
+            }
+
+            Thread.Sleep(60000);
+        }
+    }
+
+    private void MarkCompleted(Guid taskId)
+    {
+        var cmd = new SqlCommand("UPDATE PendingTasks SET Status = 1 WHERE Id = '" + taskId + "'", _connection);
+        cmd.ExecuteNonQuery();
+    }
+
+    private void MarkFailed(Guid taskId, string message)
+    {
+        var cmd = new SqlCommand("UPDATE PendingTasks SET Status = 2, Error = '" + message.Replace("'", "''") + "' WHERE Id = '" + taskId + "'", _connection);
+        cmd.ExecuteNonQuery();
+    }
+
+    private void ProcessTask(Guid taskId, string payload) { /* ... */ }
+}
+```
+
+**Твой разбор (заполни завтра):**
+
+**1. Безопасность:**  
+**2. Ресурсы / соединение:**  
+**3. Reader / циклы:**  
+**4. Исключения / повторная обработка:**  
+**5. Прочее (потоки, конфиг и т.д.):**  
+**Топ-3 исправления:**
+
+---
+
+## Кейс 10 — сервис с кэшем и внешним вызовом
+
+**Контекст:** сервис отдаёт настройки пользователя; при первом запросе грузит из API и кэширует в словаре. Найти от 5 типов проблем.
+
+```csharp
+public class UserSettingsService
+{
+    private Dictionary<Guid, UserSettings> _cache = new Dictionary<Guid, UserSettings>();
+    private static readonly HttpClient _httpClient = new HttpClient();
+
+    public UserSettings GetSettings(Guid userId)
+    {
+        if (_cache.ContainsKey(userId))
+            return _cache[userId];
+
+        var url = "https://config-api.company.com/users/" + userId + "/settings";
+        var response = _httpClient.GetAsync(url).Result;
+        response.EnsureSuccessStatusCode();
+
+        var json = response.Content.ReadAsStringAsync().Result;
+        var settings = JsonSerializer.Deserialize<UserSettings>(json);
+
+        _cache[userId] = settings;
+        return settings;
+    }
+
+    public void InvalidateCache(Guid userId)
+    {
+        _cache.Remove(userId);
+    }
+
+    public void PreloadCache(IEnumerable<Guid> userIds)
+    {
+        foreach (var id in userIds)
+            GetSettings(id);
+    }
+}
+```
+
+**Твой разбор (заполни завтра):**
+
+**1. Потокобезопасность / кэш:**  
+**2. Асинхронность:**  
+**3. Null / граничные случаи:**  
+**4. Ресурсы / конфигурация:**  
+**5. Прочее (производительность, дизайн):**  
+**Топ-3 исправления:**
