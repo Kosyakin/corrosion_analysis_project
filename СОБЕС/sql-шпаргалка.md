@@ -1,60 +1,4 @@
-# SQL — шпаргалка: JOIN, подзапросы, оконные функции
 
-Краткие примеры для подготовки к собеседованию (в т.ч. Т-Банк).
-
----
-
-## 1. JOIN
-
-### INNER JOIN — только совпадающие строки
-
-```sql
-SELECT o.Id, o.Amount, c.Name
-FROM Orders o
-INNER JOIN Customers c ON o.CustomerId = c.Id;
-```
-
-### LEFT JOIN — все из левой таблицы + совпадения справа (NULL, если нет)
-
-```sql
-SELECT c.Name, o.Id AS OrderId
-FROM Customers c
-LEFT JOIN Orders o ON c.Id = o.CustomerId;
-```
-
-### RIGHT JOIN — все из правой + совпадения слева
-
-```sql
-SELECT c.Name, o.Id
-FROM Orders o
-RIGHT JOIN Customers c ON o.CustomerId = c.Id;
-```
-
-### FULL OUTER JOIN — все из обеих (NULL где нет пары)
-
-```sql
-SELECT c.Name, o.Amount
-FROM Customers c
-FULL OUTER JOIN Orders o ON c.Id = o.CustomerId;
-```
-
-### CROSS JOIN — декартово произведение (каждая строка с каждой)
-
-```sql
-SELECT c.Name, p.ProductName
-FROM Customers c
-CROSS JOIN Products p;
-```
-
-### Несколько JOIN в одном запросе
-
-```sql
-SELECT o.Id, c.Name, p.ProductName
-FROM Orders o
-INNER JOIN Customers c ON o.CustomerId = c.Id
-INNER JOIN OrderItems oi ON oi.OrderId = o.Id
-INNER JOIN Products p ON oi.ProductId = p.Id;
-```
 
 ### SELF JOIN — таблица с самой собой (например, сотрудник → руководитель)
 
@@ -63,6 +7,10 @@ SELECT e.Name AS Employee, m.Name AS Manager
 FROM Employees e
 LEFT JOIN Employees m ON e.ManagerId = m.Id;
 ```
+
+### Hash Join (алгоритм выполнения JOIN)
+
+Одна таблица (обычно меньшая) полностью читается и строится **in-memory хеш-таблица** по ключу JOIN. Вторая таблица сканируется, для каждой строки по ключу ищется совпадение в хеше — O(1). **Когда уместен:** большие объёмы, нет индексов по ключу JOIN, нужна равноправная обработка обеих таблиц. Часто выбирают для больших JOIN’ов вместо Nested Loop. Может требовать много памяти (build-таблица должна помещаться в хеш).
 
 ---
 
@@ -86,28 +34,6 @@ WHERE EXISTS (
 );
 ```
 
-### В SELECT (скалярный подзапрос)
-
-```sql
-SELECT 
-    c.Name,
-    (SELECT COUNT(*) FROM Orders o WHERE o.CustomerId = c.Id) AS OrderCount
-FROM Customers c;
-```
-
-### В FROM (производная таблица)
-
-```sql
-SELECT sub.City, AVG(sub.Total) AS AvgTotal
-FROM (
-    SELECT c.City, SUM(o.Amount) AS Total
-    FROM Customers c
-    INNER JOIN Orders o ON o.CustomerId = c.Id
-    GROUP BY c.City
-) sub
-GROUP BY sub.City;
-```
-
 ### Сравнение с агрегатом (ALL, ANY, SOME)
 
 ```sql
@@ -118,124 +44,42 @@ WHERE Amount > ALL (SELECT Amount FROM Orders WHERE CustomerId = 1);
 -- Заказы больше, чем ЛЮБОЙ заказ клиента 1
 SELECT * FROM Orders
 WHERE Amount > ANY (SELECT Amount FROM Orders WHERE CustomerId = 1);
-```
+---
 
-### CTE (WITH) — подзапрос с именем, удобно для сложной логики
+## 3. Оконные функции
 
-```sql
-WITH TopCustomers AS (
-    SELECT CustomerId, SUM(Amount) AS Total
-    FROM Orders
-    GROUP BY CustomerId
-    HAVING SUM(Amount) > 10000
-)
-SELECT c.Name, tc.Total
-FROM Customers c
-INNER JOIN TopCustomers tc ON c.Id = tc.CustomerId;
-```
+**Шаблон:** `Функция() OVER (PARTITION BY a, b ORDER BY c [ROWS BETWEEN ...])`
 
-### Несколько CTE
+- Рамка: `UNBOUNDED PRECEDING` / `N PRECEDING` / `CURRENT ROW` / `N FOLLOWING` / `UNBOUNDED FOLLOWING`
+- Без текущей (сумма «до этой строки»): `ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING`
+- С текущей (нарастающий итог): `ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`
+- Скользящее 3 строки: `ROWS BETWEEN 2 PRECEDING AND CURRENT ROW`
 
-```sql
-WITH 
-Orders2024 AS (
-    SELECT * FROM Orders WHERE YEAR(CreatedAt) = 2024
-),
-ByCustomer AS (
-    SELECT CustomerId, COUNT(*) AS Cnt FROM Orders2024 GROUP BY CustomerId
-)
-SELECT c.Name, bc.Cnt
-FROM Customers c
-INNER JOIN ByCustomer bc ON c.Id = bc.CustomerId;
-```
+**Функции:** ROW_NUMBER, RANK, DENSE_RANK | LAG/LEAD | SUM/AVG OVER | NTILE(N), NTH_VALUE, PERCENT_RANK, CUME_DIST
 
 ---
 
-## 3. Оконные функции (window functions)
+## 4. CASE
 
-Синтаксис: `Функция() OVER (PARTITION BY ... ORDER BY ...)`  
-Строки не схлопываются (в отличие от GROUP BY), к каждой строке добавляется значение.
+**В строчку:** `CASE [столбец] WHEN значение THEN ... WHEN ... ELSE ... END` или `CASE WHEN условие THEN ... ELSE ... END`
 
-### ROW_NUMBER, RANK, DENSE_RANK
-
-```sql
-SELECT 
-    Name,
-    Salary,
-    DepartmentId,
-    ROW_NUMBER() OVER (PARTITION BY DepartmentId ORDER BY Salary DESC) AS RowNum,
-    RANK()       OVER (PARTITION BY DepartmentId ORDER BY Salary DESC) AS Rank,
-    DENSE_RANK() OVER (PARTITION BY DepartmentId ORDER BY Salary DESC) AS DenseRank
-FROM Employees;
-```
-
-- **ROW_NUMBER** — уникальный номер 1, 2, 3… внутри партиции.  
-- **RANK** — при равенстве один ранг, следующий «прыгает» (1, 2, 2, 4).  
-- **DENSE_RANK** — при равенстве один ранг, следующий идёт подряд (1, 2, 2, 3).
-
-### Топ-N по группе (например, топ-3 по отделу)
-
-```sql
-WITH Ranked AS (
-    SELECT *, ROW_NUMBER() OVER (PARTITION BY DepartmentId ORDER BY Salary DESC) AS rn
-    FROM Employees
-)
-SELECT * FROM Ranked WHERE rn <= 3;
-```
-
-### Агрегаты как оконные (без GROUP BY)
-
-```sql
-SELECT 
-    OrderId,
-    Amount,
-    SUM(Amount)   OVER (PARTITION BY CustomerId) AS CustomerTotal,
-    AVG(Amount)   OVER (PARTITION BY CustomerId) AS CustomerAvg,
-    SUM(Amount)   OVER (ORDER BY CreatedAt)     AS RunningTotal
-FROM Orders;
-```
-
-### LAG / LEAD — предыдущая и следующая строка
-
-```sql
-SELECT 
-    CreatedAt,
-    Amount,
-    LAG(Amount)  OVER (ORDER BY CreatedAt) AS PrevAmount,
-    LEAD(Amount) OVER (ORDER BY CreatedAt) AS NextAmount
-FROM Orders;
-```
-
-### FIRST_VALUE / LAST_VALUE
-
-```sql
-SELECT 
-    DepartmentId,
-    Name,
-    Salary,
-    FIRST_VALUE(Name) OVER (PARTITION BY DepartmentId ORDER BY Salary DESC) AS TopEarner
-FROM Employees;
-```
-
-### Рамка окна (ROWS / RANGE)
-
-```sql
--- Скользящее среднее по последним 3 строкам
-SELECT 
-    Date,
-    Value,
-    AVG(Value) OVER (ORDER BY Date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS MovingAvg3
-FROM DailySales;
-```
+- В SELECT: как выше. В агрегате: `SUM(CASE WHEN Status='Paid' THEN 1 ELSE 0 END)`. В ORDER BY: `ORDER BY CASE WHEN Priority='High' THEN 0 ELSE 1 END`.
 
 ---
 
-## 4. Быстрая сводка
+## 5. Работа с датой
 
-| Тема | Ключевые слова |
-|------|----------------|
-| JOIN | INNER, LEFT, RIGHT, FULL OUTER, CROSS, ON |
-| Подзапросы | (SELECT ...), IN, EXISTS, WITH ... AS (CTE) |
-| Оконные | OVER, PARTITION BY, ORDER BY, ROW_NUMBER, RANK, DENSE_RANK, LAG, LEAD, SUM/AVG OVER |
+*Синтаксис зависит от СУБД (ниже — типичные имена).*
 
-На собеседовании часто просят: «напиши запрос с JOIN», «как взять топ-N в каждой группе», «чем RANK отличается от ROW_NUMBER», «что такое CTE». Этой шпаргалки достаточно для повторения.
+| Действие | SQL Server | PostgreSQL | Пример |
+|----------|------------|------------|--------|
+| Текущие дата/время | `GETDATE()`, `SYSDATETIME()` | `CURRENT_DATE`, `NOW()` | `SELECT GETDATE()` |
+| Год/месяц/день | `YEAR(d)`, `MONTH(d)`, `DAY(d)` | то же | `YEAR(CreatedAt)` |
+| Разница дней | `DATEDIFF(day, d1, d2)` | `d2::date - d1::date` или `DATE_PART('day', d2 - d1)` | `DATEDIFF(day, Start, End)` |
+| Добавить интервал | `DATEADD(day, N, d)` | `d + INTERVAL 'N days'` | `DATEADD(month, 1, d)` |
+| Начало дня | `CAST(d AS DATE)` | `date_trunc('day', d)::date` | убрать время |
+| Начало месяца | — | `date_trunc('month', d)` | SS: `DATEFROMPARTS(YEAR(d), MONTH(d), 1)` |
+| Формат в строку | `FORMAT(d, 'yyyy-MM-dd')` | `TO_CHAR(d, 'YYYY-MM-DD')` | вывод даты |
+
+**В WHERE:** `WHERE CreatedAt >= '2024-01-01' AND CreatedAt < '2025-01-01'` (диапазон года). Для «только этот день»: `CAST(CreatedAt AS DATE) = '2024-06-15'` (или эквивалент в своей СУБД).
+
