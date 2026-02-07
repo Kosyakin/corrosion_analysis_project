@@ -453,9 +453,7 @@ public class OrdersController : ControllerBase
     public IActionResult CreateOrder([FromBody] CreateOrderRequest request)
     {
         if (request == null)
-            return BadRequest();
-
-        if (request.Amount <= 0 || request.CustomerId == Guid.Empty)
+            return BadRequest();        if (request.Amount <= 0 || request.CustomerId == Guid.Empty)
             return BadRequest("Invalid data");
 
         var order = new Order();
