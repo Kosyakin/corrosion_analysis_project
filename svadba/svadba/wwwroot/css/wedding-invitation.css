@@ -1,0 +1,209 @@
+/* Wedding Invitation Styles */
+
+/* Font families */
+.font-wonder {
+    font-family: 'Great Vibes', cursive;
+}
+
+.font-cormorant {
+    font-family: 'Cormorant Infant', serif;
+}
+
+.font-philosopher {
+    font-family: 'Philosopher', sans-serif;
+}
+
+/* Invitation block styles */
+.invitation-block {
+    max-width: 800px;
+    margin: 0 auto;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.invitation-background {
+    min-height: 400px;
+    position: relative;
+}
+
+/* Text styles matching original */
+.invitation-title {
+    font-size: 31.6887pt;
+    font-family: 'Great Vibes', cursive;
+    color: rgb(0, 0, 0);
+    text-align: center;
+    letter-spacing: 0em;
+    line-height: 1.2;
+}
+
+.invitation-text {
+    font-size: 11.9903pt;
+    font-family: 'Cormorant Infant', serif;
+    color: rgb(0, 0, 0);
+    text-align: center;
+    letter-spacing: 0.1em;
+    line-height: 1.6;
+}
+
+.invitation-subtitle {
+    font-size: 14.5597pt;
+    font-family: 'Cormorant Infant', serif;
+    color: rgb(91, 95, 122);
+    text-align: center;
+    letter-spacing: 0em;
+    font-weight: 600;
+}
+
+.invitation-quote {
+    font-size: 29.9758pt;
+    font-family: 'Great Vibes', cursive;
+    color: rgb(0, 0, 0);
+    text-align: center;
+    line-height: 1em;
+}
+
+/* Color palette styles */
+.palette-container {
+    padding: 3%;
+    border-radius: 40px;
+    background: rgba(255, 255, 255, 0.8);
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.palette-text {
+    font-size: 11.1339pt;
+    padding: 5% 5% 0%;
+    font-family: 'Philosopher', sans-serif;
+    color: rgb(0, 0, 0);
+}
+
+.colors {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.color {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: 2px solid #ddd;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    cursor: pointer;
+}
+
+.color:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Confirmation button */
+.confirmation-btn {
+    background: rgb(22, 47, 94);
+    border-radius: 200px;
+    padding: 15px 40px;
+    border: none;
+    color: white;
+    font-size: 15.4161pt;
+    font-family: 'Cormorant Infant', serif;
+    transition: background 0.3s ease, transform 0.2s ease;
+}
+
+.confirmation-btn:hover {
+    background: rgb(15, 35, 75);
+    transform: scale(1.05);
+    color: white;
+}
+
+/* Comments section */
+.comment-link {
+    font-size: 12pt;
+    font-family: 'Montserrat', sans-serif;
+    color: #808080;
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
+
+.comment-link:hover {
+    color: #007bff;
+    text-decoration: none;
+}
+
+/* Poll section */
+.poll-section {
+    background: rgb(10, 28, 55);
+    border: 0px solid rgb(255, 255, 255);
+}
+
+.poll-card {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 10px;
+    margin-bottom: 20px;
+}
+
+.poll-card .card-title {
+    color: white;
+    font-family: 'Cormorant Infant', serif;
+    font-size: 16pt;
+}
+
+.poll-card .form-check-label {
+    color: white;
+    font-family: 'Cormorant Infant', serif;
+}
+
+.poll-card .text-white-50 {
+    color: rgba(255, 255, 255, 0.7) !important;
+    font-size: 12pt;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .invitation-block {
+        padding: 20px !important;
+    }
+    
+    .invitation-background {
+        padding: 20px !important;
+    }
+
+    .invitation-title {
+        font-size: 24pt;
+    }
+
+    .invitation-text {
+        font-size: 10pt;
+        margin: 10px 0 !important;
+    }
+
+    .invitation-quote {
+        font-size: 22pt;
+    }
+
+    .color {
+        width: 50px;
+        height: 50px;
+    }
+}
+
+/* Image styles */
+.invitation-image {
+    border-radius: 0px;
+    background: rgba(255, 255, 255, 0.8);
+    padding: 0%;
+    max-width: 100%;
+    margin: 20px auto;
+    display: block;
+}
+
+.invitation-image-circle {
+    border-radius: 200px;
+    background: rgba(255, 255, 255, 0.8);
+    padding: 0%;
+    max-width: 80%;
+    margin: 0 auto;
+    display: block;
+}

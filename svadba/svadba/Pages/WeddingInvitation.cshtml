@@ -1,0 +1,305 @@
+@page
+@model WeddingModel
+@{
+    ViewData["Title"] = "Wedding Invitation";
+    Layout = "~/Pages/Shared/_WeddingLayout.cshtml";
+}
+
+@section Styles {
+    <link href="~/css/wedding-invitation.css" rel="stylesheet">
+}
+
+<!-- Wedding Invitation Section Start -->
+<div class="container-fluid py-5" id="invitation">
+    <div class="container py-5">
+        <!-- Main Invitation Block -->
+        <div class="invitation-block" style="background: rgb(255, 255, 255); padding: 40px; border-radius: 10px;">
+            <!-- Background Pattern (optional) -->
+            <div class="invitation-background" style="background-image: url('/img/invitation-bg.jpg'); background-position: 50% 50%; background-size: cover; padding: 40px; border-radius: 10px;">
+                
+                <!-- Main Text: Dear Guest -->
+                <div class="text-center mb-4" style="margin-top: 20px;">
+                    <h1 class="invitation-title">
+                        Дорогой<br>Гость!
+                    </h1>
+                </div>
+
+                <!-- Invitation Text -->
+                <div class="text-center mb-4" style="margin: 20px -40px;">
+                    <p class="invitation-text">
+                        Мы рады сообщить Вам, что <strong>24.07.2026</strong> состоится самое главное торжество в нашей жизни - день нашей свадьбы!<br>
+                        Приглашаем Вас разделить с нами радость этого незабываемого дня.<br><br>
+                    </p>
+                </div>
+
+                <!-- Place Image -->
+                <div class="text-center mb-4">
+                    <img src="https://weddingpost.site/images/797060/5b78cc_20241105095155.jpg" 
+                         alt="Место проведения" 
+                         class="img-fluid invitation-image">
+                </div>
+
+                <!-- Quote -->
+                <div class="text-center mb-4">
+                    <h2 class="invitation-quote">
+                        Там, где посеяна любовь, растёт радость!<br><br>
+                    </h2>
+                </div>
+
+                <!-- Groom and Bride Photos -->
+                <div class="row mb-4">
+                    <div class="col-md-6 text-center mb-3">
+                        <img src="https://weddingpost.site/images/797060/25b291_20241105095254.jpg" 
+                             alt="Жених" 
+                             class="img-fluid invitation-image-circle">
+                        <h3 class="invitation-quote" style="margin-top: 15px;">
+                            Имя Жениха
+                        </h3>
+                    </div>
+                    <div class="col-md-6 text-center mb-3">
+                        <img src="https://weddingpost.site/images/797060/25b291_20241105095320.jpg" 
+                             alt="Невеста" 
+                             class="img-fluid invitation-image-circle">
+                        <h3 class="invitation-quote" style="margin-top: 15px;">
+                            Имя Невесты
+                        </h3>
+                    </div>
+                </div>
+
+                <!-- Menu Section -->
+                <div class="text-center mb-4" style="margin-top: 40px;">
+                    <h4 class="invitation-subtitle">
+                        МЕНЮ
+                    </h4>
+                    <p class="invitation-text" style="margin: 20px -40px;">
+                        Меню разнообразно, поэтому сообщите нам заранее, если у вас есть какие-либо предпочтения или диетические ограничения. 
+                        После подтверждения вы сможете пройти опрос о своих вкусовых предпочтениях и напитках.<br>
+                    </p>
+                </div>
+
+                <!-- Gift Preferences Section -->
+                <div class="text-center mb-4">
+                    <h4 class="invitation-subtitle">
+                        ПОЖЕЛАНИЯ ПО ПОДАРКАМ
+                    </h4>
+                    <p class="invitation-text" style="margin: 20px -40px;">
+                        Ваше присутствие в день нашей свадьбы - самый значимый подарок для нас!<br><br>
+                        Мы понимаем, что дарить цветы на свадьбу - это традиция, но мы не сможем насладиться их красотой в полной мере...<br>
+                        Будем рады любой другой альтернативе (вино или в денежном эквиваленте).<br>
+                    </p>
+                </div>
+
+                <!-- Note Section -->
+                <div class="text-center mb-4">
+                    <h4 class="invitation-subtitle">
+                        ПРИМЕЧАНИЕ
+                    </h4>
+                    <p class="invitation-text" style="margin: 20px -40px;">
+                        Будем благодарны, если вы воздержитесь от криков "Горько" на празднике, ведь поцелуй — это знак выражения чувств,<br>
+                        он не может быть по заказу.<br>
+                    </p>
+                </div>
+
+                <!-- Confirmation Section -->
+                <div class="text-center mb-4">
+                    <h4 class="invitation-subtitle">
+                        ПОДТВЕРЖДЕНИЕ
+                    </h4>
+                    <p class="invitation-text" style="margin: 20px -40px;">
+                        Пожалуйста, подтвердите свое присутствие до <strong>01.01.2025</strong><br>
+                    </p>
+                </div>
+
+                <!-- Photo Hashtag Section -->
+                <div class="text-center mb-4">
+                    <h4 class="invitation-subtitle">
+                        ФОТО
+                    </h4>
+                    <p class="invitation-text" style="margin: 20px -40px;">
+                        Опубликуйте фото дня нашей свадьбы в соц.сетях с хештегом <strong>#ВашХештег</strong><br><br>
+                    </p>
+                </div>
+
+                <!-- Closing -->
+                <div class="text-center mb-4">
+                    <h2 class="invitation-quote">
+                        Ждем Вас
+                    </h2>
+                </div>
+            </div>
+        </div>
+
+        <!-- Color Palette Section -->
+        <div class="container py-5" id="palette">
+            <div class="text-center">
+                <div class="palette-container">
+                    <p class="palette-text">
+                        Будем благодарны, если при выборе нарядов на наше торжество вы придержитесь следующей палитры
+                    </p>
+                    <div class="colors">
+                        <div class="color" style="background: rgba(24, 26, 41, 0.21);"></div>
+                        <div class="color" style="background: rgba(24, 26, 41, 0.21);"></div>
+                        <div class="color" style="background: rgba(24, 26, 41, 0.21);"></div>
+                        <div class="color" style="background: rgba(24, 26, 41, 0.21);"></div>
+                        <div class="color" style="background: rgba(24, 26, 41, 0.21);"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Confirmation Button Section -->
+        <div class="container py-5 text-center" id="confirmation">
+            <button class="btn confirmation-btn">
+                <i class="fa fa-check"></i> Подтвердить
+            </button>
+        </div>
+
+        <!-- Comments Section -->
+        <div class="container py-5" id="comments">
+            <div class="text-center mb-4">
+                <a href="#" class="comment-link">
+                    <i class="fa-comment fa"></i> Добавить сообщение для жениха и невесты
+                </a>
+            </div>
+        </div>
+
+        <!-- Poll Section -->
+        <div class="container-fluid py-5 poll-section" id="poll" style="display: none;">
+            <div class="container py-5">
+                <div class="alert alert-warning text-center mb-4">
+                    <p>Пожалуйста, ответьте на вопросы, которые для вас подготовили <strong>Имя Жениха</strong> и <strong>Имя Невесты</strong>:</p>
+                </div>
+
+                <!-- Question 1: Transport -->
+                <div class="card mb-4 poll-card">
+                    <div class="card-body">
+                        <h5 class="card-title text-white mb-3">Потребуется ли вам трансфер?</h5>
+                        <p class="text-white-50 mb-3">Несколько ответов</p>
+                        <div class="form-check text-white mb-2">
+                            <input class="form-check-input" type="checkbox" value="" id="transport1">
+                            <label class="form-check-label" for="transport1">
+                                <i class="fa fa-circle-o"></i> Нет
+                            </label>
+                        </div>
+                        <div class="form-check text-white mb-2">
+                            <input class="form-check-input" type="checkbox" value="" id="transport2">
+                            <label class="form-check-label" for="transport2">
+                                <i class="fa fa-circle-o"></i> Только до торжества
+                            </label>
+                        </div>
+                        <div class="form-check text-white mb-2">
+                            <input class="form-check-input" type="checkbox" value="" id="transport3">
+                            <label class="form-check-label" for="transport3">
+                                <i class="fa fa-circle-o"></i> Только после торжества
+                            </label>
+                        </div>
+                        <div class="form-check text-white">
+                            <input class="form-check-input" type="checkbox" value="" id="transport4">
+                            <label class="form-check-label" for="transport4">
+                                <i class="fa fa-circle-o"></i> До и после торжества
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Question 2: Food Preferences -->
+                <div class="card mb-4 poll-card">
+                    <div class="card-body">
+                        <h5 class="card-title text-white mb-3">Есть ли у вас особые предпочтения по еде</h5>
+                        <p class="text-white-50 mb-3">Несколько ответов</p>
+                        <div class="form-check text-white mb-2">
+                            <input class="form-check-input" type="checkbox" value="" id="food1">
+                            <label class="form-check-label" for="food1">
+                                <i class="fa fa-circle-o"></i> нет
+                            </label>
+                        </div>
+                        <div class="form-check text-white mb-2">
+                            <input class="form-check-input" type="checkbox" value="" id="food2">
+                            <label class="form-check-label" for="food2">
+                                <i class="fa fa-circle-o"></i> не ем мясо
+                            </label>
+                        </div>
+                        <div class="form-check text-white mb-2">
+                            <input class="form-check-input" type="checkbox" value="" id="food3">
+                            <label class="form-check-label" for="food3">
+                                <i class="fa fa-circle-o"></i> не ем рыбу
+                            </label>
+                        </div>
+                        <div class="form-check text-white">
+                            <input class="form-check-input" type="checkbox" value="" id="food4">
+                            <label class="form-check-label" for="food4">
+                                <i class="fa fa-circle-o"></i> вегетарианец
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Question 3: Alcohol Preferences -->
+                <div class="card mb-4 poll-card">
+                    <div class="card-body">
+                        <h5 class="card-title text-white mb-3">Какой алкоголь вы предпочитаете?</h5>
+                        <p class="text-white-50 mb-3">Несколько ответов</p>
+                        <div class="form-check text-white mb-2">
+                            <input class="form-check-input" type="checkbox" value="" id="alcohol1">
+                            <label class="form-check-label" for="alcohol1">
+                                <i class="fa fa-circle-o"></i> Красное вино
+                            </label>
+                        </div>
+                        <div class="form-check text-white mb-2">
+                            <input class="form-check-input" type="checkbox" value="" id="alcohol2">
+                            <label class="form-check-label" for="alcohol2">
+                                <i class="fa fa-circle-o"></i> Белое вино
+                            </label>
+                        </div>
+                        <div class="form-check text-white mb-2">
+                            <input class="form-check-input" type="checkbox" value="" id="alcohol3">
+                            <label class="form-check-label" for="alcohol3">
+                                <i class="fa fa-circle-o"></i> Шампанское
+                            </label>
+                        </div>
+                        <div class="form-check text-white mb-2">
+                            <input class="form-check-input" type="checkbox" value="" id="alcohol4">
+                            <label class="form-check-label" for="alcohol4">
+                                <i class="fa fa-circle-o"></i> Виски/коньяк
+                            </label>
+                        </div>
+                        <div class="form-check text-white mb-2">
+                            <input class="form-check-input" type="checkbox" value="" id="alcohol5">
+                            <label class="form-check-label" for="alcohol5">
+                                <i class="fa fa-circle-o"></i> Водка
+                            </label>
+                        </div>
+                        <div class="form-check text-white">
+                            <input class="form-check-input" type="checkbox" value="" id="alcohol6">
+                            <label class="form-check-label" for="alcohol6">
+                                <i class="fa fa-circle-o"></i> Не буду пить алкоголь
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Question 4: Children -->
+                <div class="card mb-4 poll-card">
+                    <div class="card-body">
+                        <h5 class="card-title text-white mb-3">Будет ли с вами на празднике ребенок?</h5>
+                        <p class="text-white-50 mb-3">Несколько ответов</p>
+                        <div class="form-check text-white mb-2">
+                            <input class="form-check-input" type="checkbox" value="" id="children1">
+                            <label class="form-check-label" for="children1">
+                                <i class="fa fa-circle-o"></i> Да
+                            </label>
+                        </div>
+                        <div class="form-check text-white">
+                            <input class="form-check-input" type="checkbox" value="" id="children2">
+                            <label class="form-check-label" for="children2">
+                                <i class="fa fa-circle-o"></i> Нет
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Wedding Invitation Section End -->
+

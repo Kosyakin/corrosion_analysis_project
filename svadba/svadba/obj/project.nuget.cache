@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "+tuckujH7Ms=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\KosyakinVV\\projects\\corrosion_analysis_project\\corrosion_analysis_project\\svadba\\svadba\\svadba.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\KosyakinVV\\.nuget\\packages\\microsoft.visualstudio.azure.containers.tools.targets\\1.22.1\\microsoft.visualstudio.azure.containers.tools.targets.1.22.1.nupkg.sha512"
+  ],
+  "logs": []
+}
