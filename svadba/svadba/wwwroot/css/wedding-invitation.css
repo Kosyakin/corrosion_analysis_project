@@ -207,3 +207,45 @@
     margin: 0 auto;
     display: block;
 }
+
+/* Poll section with white background */
+.poll-card-white {
+    background: rgba(248, 249, 250, 0.8);
+    border: 1px solid #e9ecef;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.poll-card-white .card-title {
+    color: rgb(0, 0, 0);
+    font-family: 'Cormorant Infant', serif;
+    font-size: 12.8468pt;
+    font-weight: 600;
+}
+
+.poll-card-white .form-check-label {
+    color: rgb(0, 0, 0);
+    font-family: 'Cormorant Infant', serif;
+    font-size: 11.1339pt;
+}
+
+.poll-card-white .text-muted {
+    color: #6c757d !important;
+    font-size: 12pt;
+}
+
+/* Corner decoration */
+.corner_content {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.corner {
+    width: 0;
+    height: 0;
+    border-left: 20px solid transparent;
+    border-right: 20px solid transparent;
+    border-bottom: 20px solid;
+    margin: 0 auto;
+}

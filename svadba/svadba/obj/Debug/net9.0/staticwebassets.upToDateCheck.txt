@@ -1,7 +1,6 @@
 wwwroot\css\all.min.css
 wwwroot\css\site.css
 wwwroot\css\style.min.css
-wwwroot\css\wedding-invitation.css
 wwwroot\favicon.ico
 wwwroot\img\about-1.jpg
 wwwroot\img\about-2.jpg
@@ -123,6 +122,7 @@ wwwroot\webfonts\fa-solid-900.ttf
 wwwroot\webfonts\fa-solid-900.woff2
 wwwroot\webfonts\fa-v4compatibility.ttf
 wwwroot\webfonts\fa-v4compatibility.woff2
+wwwroot\css\wedding-invitation.css
 C:\Users\KosyakinVV\projects\corrosion_analysis_project\corrosion_analysis_project\svadba\svadba\wwwroot\css\all.min.css
 C:\Users\KosyakinVV\projects\corrosion_analysis_project\corrosion_analysis_project\svadba\svadba\wwwroot\css\site.css
 C:\Users\KosyakinVV\projects\corrosion_analysis_project\corrosion_analysis_project\svadba\svadba\wwwroot\css\style.min.css
