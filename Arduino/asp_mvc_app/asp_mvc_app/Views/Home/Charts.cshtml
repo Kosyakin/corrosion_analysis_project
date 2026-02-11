@@ -1,0 +1,126 @@
+@{
+    ViewData["Title"] = "Графики качества воздуха";
+}
+
+<h1 class="mb-4">Показания датчика SCD40/SCD41</h1>
+<p class="text-muted mb-4">Нормы для организма отмечены линиями на графиках.</p>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div id="chart-co2" style="width: 100%; height: 320px;"></div>
+        <p class="small text-muted mt-1">CO₂: рекомендуется до 1000 ppm; верхняя граница комфорта — 2000 ppm.</p>
+    </div>
+</div>
+<div class="row mb-4">
+    <div class="col-12">
+        <div id="chart-temp" style="width: 100%; height: 320px;"></div>
+        <p class="small text-muted mt-1">Температура: комфортная зона для человека 18–24 °C.</p>
+    </div>
+</div>
+<div class="row mb-4">
+    <div class="col-12">
+        <div id="chart-humidity" style="width: 100%; height: 320px;"></div>
+        <p class="small text-muted mt-1">Влажность: рекомендуется 30–60 %.</p>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <script>
+        (function () {
+            const apiUrl = '/api/AirSamples?limit=500';
+
+            function formatTime(ms) {
+                const d = new Date(ms);
+                return d.toLocaleString('ru-RU', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+            }
+
+            fetch(apiUrl)
+                .then(r => r.json())
+                .then(data => {
+                    if (!data || data.length === 0) {
+                        document.querySelector('#chart-co2').innerHTML = '<p class="text-muted p-4">Нет данных. Отправьте показания с датчика через API.</p>';
+                        document.querySelector('#chart-temp').innerHTML = '';
+                        document.querySelector('#chart-humidity').innerHTML = '';
+                        return;
+                    }
+                    const times = data.map(x => formatTime(new Date(x.measured_at).getTime()));
+                    const co2 = data.map(x => x.co2_ppm);
+                    const temp = data.map(x => Number(x.temperature_c));
+                    const humidity = data.map(x => Number(x.humidity_rh));
+
+                    const commonOption = {
+                        tooltip: { trigger: 'axis' },
+                        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+                        xAxis: { type: 'category', boundaryGap: false, data: times }
+                    };
+
+                    const chartCo2 = echarts.init(document.getElementById('chart-co2'));
+                    chartCo2.setOption({
+                        ...commonOption,
+                        title: { text: 'CO₂ (ppm)' },
+                        yAxis: { type: 'value', name: 'ppm', min: 0 },
+                        series: [{
+                            name: 'CO₂',
+                            type: 'line',
+                            smooth: true,
+                            data: co2,
+                            markLine: {
+                                data: [
+                                    { yAxis: 1000, name: 'Рекомендуемый предел (1000)', lineStyle: { color: '#f0ad4e' } },
+                                    { yAxis: 2000, name: 'Верхняя граница (2000)', lineStyle: { color: '#d9534f' } }
+                                ]
+                            }
+                        }]
+                    });
+
+                    const chartTemp = echarts.init(document.getElementById('chart-temp'));
+                    chartTemp.setOption({
+                        ...commonOption,
+                        title: { text: 'Температура (°C)' },
+                        yAxis: { type: 'value', name: '°C' },
+                        series: [{
+                            name: 'Температура',
+                            type: 'line',
+                            smooth: true,
+                            data: temp,
+                            markLine: {
+                                data: [
+                                    { yAxis: 18, name: 'Нижняя граница комфорта (18 °C)', lineStyle: { color: '#5bc0de' } },
+                                    { yAxis: 24, name: 'Верхняя граница комфорта (24 °C)', lineStyle: { color: '#5cb85c' } }
+                                ]
+                            }
+                        }]
+                    });
+
+                    const chartHumidity = echarts.init(document.getElementById('chart-humidity'));
+                    chartHumidity.setOption({
+                        ...commonOption,
+                        title: { text: 'Влажность (%)' },
+                        yAxis: { type: 'value', name: '%', min: 0, max: 100 },
+                        series: [{
+                            name: 'Влажность',
+                            type: 'line',
+                            smooth: true,
+                            data: humidity,
+                            markLine: {
+                                data: [
+                                    { yAxis: 30, name: 'Рекомендуемый минимум (30 %)', lineStyle: { color: '#5bc0de' } },
+                                    { yAxis: 60, name: 'Рекомендуемый максимум (60 %)', lineStyle: { color: '#5cb85c' } }
+                                ]
+                            }
+                        }]
+                    });
+
+                    window.addEventListener('resize', function () {
+                        chartCo2.resize();
+                        chartTemp.resize();
+                        chartHumidity.resize();
+                    });
+                })
+                .catch(err => {
+                    document.querySelector('#chart-co2').innerHTML = '<p class="text-danger p-4">Ошибка загрузки данных: ' + err.message + '</p>';
+                });
+        })();
+    </script>
+}

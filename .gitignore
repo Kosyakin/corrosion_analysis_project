@@ -149,3 +149,21 @@ data/
 *.csv
 *.xlsx
 *.json
+
+# Archives
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+
+# Secrets and local config (passwords, connection strings, keys)
+.env.*
+!.env.example
+**/appsettings.Development.json
+**/appsettings.Local.json
+**/appsettings.*.local.json
+**/secrets.json
+**/*secrets*.json
+**/launchSettings.json
+**/*credentials*
+**/*.pfx
