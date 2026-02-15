@@ -1,6 +1,7 @@
 using asp_mvc_app.Models;
 using Microsoft.AspNetCore.Mvc;
 using Npgsql;
+using NpgsqlTypes;
 
 namespace asp_mvc_app.Controllers;
 
@@ -42,7 +43,11 @@ public class AirSamplesController : ControllerBase
                 LIMIT @limit";
             await using var cmd = new NpgsqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("limit", limit);
-            cmd.Parameters.AddWithValue("device_id", (object?)device_id ?? DBNull.Value);
+            var deviceIdParam = new NpgsqlParameter("device_id", NpgsqlDbType.Text)
+            {
+                Value = (object?)device_id ?? DBNull.Value
+            };
+            cmd.Parameters.Add(deviceIdParam);
 
             var list = new List<AirSampleChartItem>();
             await using var reader = await cmd.ExecuteReaderAsync(ct);

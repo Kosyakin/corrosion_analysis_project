@@ -1,13 +1,18 @@
 services:
   asp_mvc_app:
-    build:
-      context: ./asp_mvc_app
-      dockerfile: Dockerfile
+    # Используйте имя вашего образа (например: your-registry/air-quality-app:latest)
+    # Или установите через переменную окружения: export IMAGE_NAME=your-registry/air-quality-app:latest
+    image: ${IMAGE_NAME:-air-quality-app:latest}
     container_name: air_quality_web
     ports:
       - "5640:8080"
     environment:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__DefaultConnection: "Host=0.0.0.0;Port=5432;Database=home_db;Username=homeuser;Password=40000j,tpmzy"
-
-
+    restart: unless-stopped
+    # Если нужен healthcheck
+    # healthcheck:
+    #   test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3

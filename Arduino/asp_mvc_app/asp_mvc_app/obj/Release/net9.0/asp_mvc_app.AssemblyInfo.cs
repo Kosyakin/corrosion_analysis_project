@@ -15,7 +15,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("asp_mvc_app")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+656cc1e36d508a1179b363a86e9a6ea5d2728fbd")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+bee1353bba096803fd6b0e32ffdf4d6a577e3fa2")]
 [assembly: System.Reflection.AssemblyProductAttribute("asp_mvc_app")]
 [assembly: System.Reflection.AssemblyTitleAttribute("asp_mvc_app")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

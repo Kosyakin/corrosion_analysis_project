@@ -13,8 +13,8 @@
 #include <SensirionI2cScd4x.h>
 
 // ----- Настройки: измените под свою сеть и сервер -----
-#define WIFI_SSID      "ROSTELEKOM_7B62_5G"
-#define WIFI_PASSWORD  "KFNCDHDH"
+#define WIFI_SSID      "Puk-puk"
+#define WIFI_PASSWORD  "Kvv12345"
 #define API_BASE_URL   "http://192.168.31.73:5640"   // Без слэша в конце
 #define DEVICE_ID      "esp32-scd40-01"
 #define FW_VERSION     "1.0"
