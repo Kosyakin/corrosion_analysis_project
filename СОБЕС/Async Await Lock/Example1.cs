@@ -42,9 +42,11 @@ public class Example1
     // Race condition: если два потока одновременно вызовут LoadDataAsync с одним и тем же URL и в кэше его ещё нет, оба пройдут проверку, оба сделают HTTP-запрос и оба добавят ответ в кэш. Лишний запрос и дублирование в кэше.
     // Чтобы этого избежать, нужна дополнительная синхронизация, например, SemaphoreSlim на один URL или AsyncLock/паттерн с задачей для каждого URL.
 
+
+
     // ----- Метод 2 -----
-    public async void ProcessItemsAsync(IEnumerable<string> items)
-    {
+    public async void ProcessItemsAsync(IEnumerable<string> items) // Ничего не возвращает, может привести 
+    { // Нет проверки на null, что может привести к ошибке
         foreach (var item in items)
         {
             var result = await ProcessItemAsync(item);
@@ -53,13 +55,18 @@ public class Example1
     }
 
     private Task<string> ProcessItemAsync(string item)
-    {
+    {// Нет проверки на null, что может привести к ошибке
         return Task.Run(() =>
         {
-            Thread.Sleep(100);
+            Thread.Sleep(100);// Лучше использовать Task.Delay()
             return item.ToUpper();
         });
-    }
+    }// Да и в целом лучше переписать вот так:
+    private async Task<string> ProcessItemAsync(string item)
+    {// Нет проверки на null, что может привести к ошибке
+        Task.Delay(100);// Лучше использовать Task.Delay()
+        return item.ToUpper();
+    }// Да и в целом лучше переписать вот так:
 
     // ----- Метод 3 -----
     public int IncrementCounter()
